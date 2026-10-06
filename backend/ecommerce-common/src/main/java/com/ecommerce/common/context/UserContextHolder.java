@@ -73,6 +73,15 @@ public class UserContextHolder {
         return user.isAdmin() ? null : user.getMerchantId();
     }
 
+    /**
+     * 当前操作者是否为平台管理员。
+     * <p>用于「管理员可看全部、商家只看自己」这类分支判断。</p>
+     */
+    public static boolean isAdmin() {
+        LoginUser user = CONTEXT.get();
+        return user != null && user.isAdmin();
+    }
+
     /** 要求管理员身份 */
     public static void requireAdmin() {
         LoginUser user = CONTEXT.get();

@@ -124,6 +124,10 @@ const merchantRoutes = [
       { path: 'after-sale', name: 'merchant-after-sale',
         component: () => import('@/views/merchant/AfterSaleView.vue'),
         meta: { title: '售后处理', merchantOnly: true } },
+      // 秒杀活动管理：商家发自己的活动，管理员发平台活动，同一路由按角色区分数据范围
+      { path: 'seckill-activity', name: 'merchant-seckill-activity',
+        component: () => import('@/views/merchant/SeckillActivityView.vue'),
+        meta: { title: '秒杀活动' } },
       { path: 'shop', name: 'merchant-shop',
         component: () => import('@/views/merchant/ShopSettingView.vue'),
         meta: { title: '店铺设置', merchantOnly: true } },

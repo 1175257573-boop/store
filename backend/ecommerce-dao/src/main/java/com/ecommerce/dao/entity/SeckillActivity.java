@@ -25,7 +25,20 @@ public class SeckillActivity implements Serializable {
     /** 活动业务编号 */
     private String activityNo;
 
+    /**
+     * 归属商家ID，NULL 表示平台自建活动。
+     * <p>商家只能看到和操作自己店铺的活动，平台自建活动对所有商家可见但不可改。</p>
+     */
+    @JsonSerialize(using = ToStringSerializer.class)
+    private Long merchantId;
+
     private String name;
+
+    /** 活动封面 */
+    private String coverImage;
+
+    /** 活动说明 */
+    private String description;
 
     /**
      * 总库存。
@@ -39,6 +52,13 @@ public class SeckillActivity implements Serializable {
      * <p>把 totalStock 拆成 bucketCount 个桶，请求随机路由。</p>
      */
     private Integer bucketCount;
+
+    /**
+     * 每人限购数量。
+     * <p>1 = 每人只能抢 1 件，是秒杀最常见的规则。
+     * 由 t_seckill_order 上的唯一索引 {@code uk_user_activity_sku} 兜底保证。</p>
+     */
+    private Integer limitPerUser;
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime startTime;

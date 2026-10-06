@@ -88,4 +88,12 @@ public interface SeckillOrderMapper extends BaseMapper<SeckillOrder> {
     @Select("SELECT COUNT(*) FROM t_seckill_order "
             + "WHERE activity_id = #{activityId} AND status IN (0, 1)")
     int countValidOrders(@Param("activityId") Long activityId);
+
+    /**
+     * 活动下的订单数（管理端判断活动能否删除用）。
+     * <p>统计全部状态：已取消的订单也是这条活动产生的记录，
+     * 删了活动会让历史订单查不到归属。</p>
+     */
+    @Select("SELECT COUNT(*) FROM t_seckill_order WHERE activity_id = #{activityId}")
+    Long countByActivity(@Param("activityId") Long activityId);
 }

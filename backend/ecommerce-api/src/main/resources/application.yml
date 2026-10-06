@@ -100,13 +100,16 @@ ecommerce:
     activity-check: 60000
     # 限流配置
     rate-limit:
-      enabled: true
-      # 全局每秒允许通过的请求数（令牌桶，允许突发）
-      global-qps: 2000
+      # 支持环境变量覆盖：压测时用 RATE_LIMIT_ENABLED=false 关闭，
+      # 线上出问题需要紧急放开时也用它。默认值 true 保持防护。
+      enabled: ${RATE_LIMIT_ENABLED:true}
+      # 全局每秒允许通过的请求数（令牌桶，允许突发）。
+      # 调大需同步调大 Redis 连接池与数据库连接池，否则瓶颈只是转移。
+      global-qps: ${RATE_LIMIT_GLOBAL_QPS:2000}
       # 单用户每秒最多 1 次（秒杀限购 1 件，这个值最严）
-      user-qps: 1
+      user-qps: ${RATE_LIMIT_USER_QPS:1}
       # 单 IP 每秒最多 5 次（防代理池刷单）
-      ip-qps: 5
+      ip-qps: ${RATE_LIMIT_IP_QPS:5}
 
 # 接口文档
 springdoc:

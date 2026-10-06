@@ -44,3 +44,18 @@ export const cancelOrder = id => request.post(`/order/${id}/cancel`)
 export const payOrder = id => request.post(`/order/${id}/pay`)
 export const confirmOrder = id => request.post(`/order/${id}/confirm`)
 export const getOrderCount = () => request.get('/order/count')
+
+// ===== 秒杀活动管理（避免与其他模块重复定义，统一从这里导出）=====
+export {
+  publishActivity,
+  updateActivity,
+  listActivities,
+  getActivityDetail,
+  changeActivityStatus,
+  deleteActivity,
+  resetActivityStock,
+  getActivityStockSummary,
+  getCurrentActivity,
+  seckill,
+  querySeckillResult
+} from './seckillAdmin'

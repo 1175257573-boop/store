@@ -34,6 +34,9 @@
             <el-icon><RefreshLeft /></el-icon>售后处理
             <el-badge v-if="badges.pendingAfterSale" :value="badges.pendingAfterSale" class="menu-badge" />
           </el-menu-item>
+          <el-menu-item index="/merchant/seckill-activity">
+            <el-icon><Lightning /></el-icon>秒杀活动
+          </el-menu-item>
           <el-menu-item index="/merchant/shop">
             <el-icon><Shop /></el-icon>店铺设置
           </el-menu-item>
@@ -48,6 +51,10 @@
              红点用绝对定位挂在标签右上角，而不是当普通流内元素：
              el-badge 是 inline-block，放在 flex 菜单项里会被拉伸，
              垂直居中后视觉上偏下，且菜单项高度不一致时位置会漂。 -->
+        <!-- 管理员侧：平台自建活动 + 审核 -->
+        <el-menu-item v-if="isAdmin" index="/merchant/seckill-activity">
+          <el-icon><Lightning /></el-icon>秒杀活动
+        </el-menu-item>
         <el-menu-item v-if="isAdmin" index="/merchant/audit" class="menu-item-with-badge">
           <el-icon><Stamp /></el-icon>入驻审核
           <el-badge v-if="adminTodo.applyPending > 0"
@@ -85,7 +92,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   DataLine, Goods, List, RefreshLeft, Shop, Stamp,
-  DocumentChecked, ArrowLeft, Bell
+  DocumentChecked, ArrowLeft, Bell, Lightning
 } from '@element-plus/icons-vue'
 import { getMyShop, getDashboardBadges, getAdminTodo } from '@/api/merchant'
 import { roleFromToken } from '@/stores/user'

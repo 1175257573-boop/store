@@ -51,4 +51,39 @@ public interface SeckillActivityMapper extends BaseMapper<SeckillActivity> {
             + "WHERE status = 1 AND end_time &lt; #{now}"
             + "</script>")
     int finishExpiredActivities(@Param("now") LocalDateTime now);
+
+    /**
+     * 管理端/商家端活动列表。
+     *
+     * @param merchantId 传 null 表示不限制（平台管理员看全部）
+     */
+    @Select("<script>SELECT * FROM t_seckill_activity "
+            + "<where>"
+            + "  <if test='merchantId != null'> AND merchant_id = #{merchantId} </if>"
+            + "  <if test='status != null'> AND status = #{status} </if>"
+            + "  <if test='keyword != null and keyword != \"\"'>"
+            + "    AND (name LIKE CONCAT('%', #{keyword}, '%')"
+            + "         OR activity_no LIKE CONCAT('%', #{keyword}, '%'))"
+            + "  </if>"
+            + "</where> ORDER BY id DESC</script>")
+    List<SeckillActivity> selectByCondition(@Param("merchantId") Long merchantId,
+                                           @Param("status") Integer status,
+                                           @Param("keyword") String keyword);
+
+    /**
+     * 活动上下线。
+     * <p>带原状态条件做守卫：影响 0 行说明状态已变，调用方据此提示。</p>
+     */
+    @Update("UPDATE t_seckill_activity SET status = #{status} "
+            + "WHERE id = #{activityId} AND status <> 3")
+    int changeStatus(@Param("activityId") Long activityId,
+                     @Param("status") Integer status);
+
+    /** 活动编号唯一性校验（发布时用） */
+    @Select("SELECT COUNT(*) FROM t_seckill_activity WHERE activity_no = #{activityNo}")
+    Long countByActivityNo(@Param("activityNo") String activityNo);
+
+    /** 该活动下已有订单数：有订单的活动不允许删除 */
+    @Select("SELECT COUNT(*) FROM t_seckill_order WHERE activity_id = #{activityId}")
+    Long countOrders(@Param("activityId") Long activityId);
 }

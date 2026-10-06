@@ -58,6 +58,23 @@ def scalar(q):
     return lines[-1].split("\t")[0] if len(lines) > 1 else None
 
 
+def ensure_stress_users(n=20):
+    """准备压测用户。
+
+    这些账号可能被 seckill_loadtest.py 的清理逻辑删掉，
+    缺失时 login() 返回 None，后续断言会因为「一个请求都没发」而误报。
+    """
+    sql("DELETE FROM t_user WHERE username LIKE 'stress_%';")
+    pwd = sql("SELECT password FROM t_user WHERE username='demo' LIMIT 1;")
+    pwd = [l for l in pwd.splitlines() if l.strip() and "Warning" not in l][-1]
+    rows = ",".join(
+        f"('stress_{i:04d}','{pwd}','压测用户{i}','138{i:08d}',1,0)"
+        for i in range(n))
+    sql("INSERT IGNORE INTO t_user (username,password,nickname,phone,status,role) "
+        f"VALUES {rows};")
+    return n
+
+
 def check(name, cond, detail=""):
     if cond:
         passed.append(name)
@@ -111,6 +128,10 @@ def order_count():
 print("=" * 70)
 print("秒杀生产能力专项测试")
 print("=" * 70)
+
+# 压测账号可能被 seckill_loadtest.py 清理，缺失会导致「一个请求都没发」而误报
+ensure_stress_users(20)
+print("  已准备 20 个压测用户")
 
 # ================================================================
 print("\n【A】限流层 —— 三维限流")

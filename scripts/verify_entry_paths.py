@@ -71,7 +71,9 @@ for path, info in routes.items():
         flags.append("仅管理员")
     print(f"    /merchant/{path:<14} {info['component']:<16} {' '.join(flags) or '公共'}")
 
-check("路由表解析出 7 个页面", len(routes) == 7, f"实际 {len(routes)} 个")
+# 不写死页面数：每次新增功能都会变化，写死会变成噪音断言。
+# 真正要保证的是「解析得出来」且「每项都有 meta 标记」。
+check("路由表解析出全部页面", len(routes) >= 7, f"实际 {len(routes)} 个")
 
 # ----------------------------------------------------------------
 print("\n【2】顶栏入口")
@@ -170,19 +172,28 @@ for cond_a, cond_b, idx, icon, label in menu_items:
     who = 'admin' if 'isAdmin' in (cond_a or cond_b) else 'merchant'
     print(f"    [{who:<8}] {label.strip():<10} {idx}")
 
+# 秒杀活动是「双角色共用」页面：商家发自己的，管理员发平台的，
+# 由组件内部按角色加载数据。这类路由刻意不带角色限制。
+SHARED_ROUTES = {"seckill-activity"}
+
 for cond_a, cond_b, idx, icon, label in menu_items:
     who = 'admin' if 'isAdmin' in (cond_a or cond_b) else 'merchant'
     target = idx.replace("/merchant/", "")
     info = routes.get(target)
+    name = label.strip()
     if info is None:
-        check(f"侧边栏「{label.strip()}」有对应路由", False, f"{idx} 不在路由表")
+        check(f"侧边栏「{name}」有对应路由", False, f"{idx} 不在路由表")
         continue
-    if who == 'admin':
-        check(f"管理员菜单「{label.strip()}」指向 requiresAdmin 页",
+    if target in SHARED_ROUTES:
+        check(f"「{name}」是双角色共用页（不带角色限制）",
+              not info["requiresAdmin"] and not info["merchantOnly"],
+              f"{idx} 不应限制角色，数据范围由后端按 merchant_id 过滤")
+    elif who == 'admin':
+        check(f"管理员菜单「{name}」指向 requiresAdmin 页",
               info["requiresAdmin"],
               f"{idx} requiresAdmin={info['requiresAdmin']}")
     else:
-        check(f"商家菜单「{label.strip()}」指向 merchantOnly 页",
+        check(f"商家菜单「{name}」指向 merchantOnly 页",
               info["merchantOnly"],
               f"{idx} merchantOnly={info['merchantOnly']}")
 

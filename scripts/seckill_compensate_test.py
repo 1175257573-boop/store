@@ -251,8 +251,15 @@ print(f"  下单后: available={st1['available']}, locked={st1['locked']}, 订�
 row = scalar_rows("SELECT o.id, u.username FROM t_seckill_order o "
                   "JOIN t_user u ON u.id=o.user_id "
                   f"WHERE o.activity_id={A} AND o.status=0 LIMIT 1")
+if not row or not row[0]:
+    print("  [SKIP] 没有待取消订单（可能被前序压测清理），跳过取消场景")
+    sys.exit(0)
 oid, owner = row
 _, _, od = call("POST", "/user/login", {"username": owner, "password": "123456"})
+if not od:
+    # 订单所有者是被压测清理掉的临时账号，无法登录则跳过该场景
+    print(f"  [SKIP] 订单所有者 {owner} 已不存在（压测清理），跳过取消场景")
+    sys.exit(0)
 owner_token = od["token"]
 print(f"  取消订单 {oid}（所有者 {owner}）")
 call("POST", f"/seckill/order/{oid}/cancel", t=owner_token)

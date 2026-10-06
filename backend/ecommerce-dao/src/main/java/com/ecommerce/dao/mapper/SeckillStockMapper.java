@@ -2,6 +2,7 @@ package com.ecommerce.dao.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.ecommerce.dao.entity.SeckillStock;
+import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
@@ -119,4 +120,32 @@ public interface SeckillStockMapper extends BaseMapper<SeckillStock> {
     int updateStockTotal(@Param("activityId") Long activityId,
                          @Param("skuId") Long skuId,
                          @Param("total") Integer total);
+
+    /**
+     * 活动下所有 SKU 的库存（管理端活动详情用）。
+     */
+    @Select("SELECT s.*, p.name AS product_name, p.main_image AS product_image "
+            + "FROM t_seckill_stock s LEFT JOIN t_product p ON p.id = s.sku_id "
+            + "WHERE s.activity_id = #{activityId} ORDER BY s.sku_id")
+    java.util.List<java.util.Map<String, Object>> selectByActivity(
+            @Param("activityId") Long activityId);
+
+    /**
+     * 活动下的 SKU + 商品信息（发布弹窗选择商品时展示）。
+     */
+    @Select("SELECT s.sku_id, s.total_stock, s.available, "
+            + "p.name, p.main_image, p.price "
+            + "FROM t_seckill_stock s LEFT JOIN t_product p ON p.id = s.sku_id "
+            + "WHERE s.activity_id = #{activityId}")
+    java.util.List<java.util.Map<String, Object>> selectSkuWithProduct(
+            @Param("activityId") Long activityId);
+
+    /** 活动库存汇总：[可用, 锁定, 已售] */
+    @Select("SELECT IFNULL(SUM(available),0), IFNULL(SUM(locked),0), IFNULL(SUM(sold),0) "
+            + "FROM t_seckill_stock WHERE activity_id = #{activityId}")
+    java.util.List<Integer> sumStock(@Param("activityId") Long activityId);
+
+    /** 删除活动的全部库存记录（删活动 / 改活动商品时调用） */
+    @Delete("DELETE FROM t_seckill_stock WHERE activity_id = #{activityId}")
+    int deleteByActivity(@Param("activityId") Long activityId);
 }
