@@ -1,0 +1,137 @@
+server:
+  port: 8080
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+  tomcat:
+    uri-encoding: UTF-8
+
+spring:
+  application:
+    name: ecommerce-api
+
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    # 账号密码走环境变量注入，仓库里不写真实凭据。
+    # 本地开发设置环境变量即可，未设置时用默认值兜底。
+    url: ${DB_URL:jdbc:mysql://localhost:3306/ecommerce?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root}
+    hikari:
+      # 连接池：核心 10、最大 20，空闲超时 10 分钟
+      minimum-idle: 5
+      maximum-pool-size: 20
+      idle-timeout: 600000
+      connection-timeout: 30000
+      max-lifetime: 1800000
+      pool-name: EcommerceHikariPool
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      database: 0
+      # 命令超时压到 1s：Redis 挂掉时要「快速失败」而不是干等。
+      # 5s 太长——高并发下每个请求都等 5s 会直接拖垮整个服务，
+      # 降级逻辑根本来不及生效（请求在等 Redis 时就堆积了）。
+      timeout: 1000ms
+      connect-timeout: 1000ms
+      lettuce:
+        pool:
+          max-active: 32
+          max-idle: 16
+          min-idle: 4
+          # 取连接的最大等待时间也要短：拿不到连接立刻抛异常走降级
+          max-wait: 500ms
+        shutdown-timeout: 200ms
+
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: GMT+8
+    default-property-inclusion: non_null
+
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 20MB
+
+# MyBatis-Plus
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: com.ecommerce.dao.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    cache-enabled: false
+    # 生产环境切勿开启：StdOutImpl 会把参数原样打日志，含密码等敏感字段。
+    # 排查问题时临时打开，用完记得关。
+    log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
+  global-config:
+    banner: false
+    db-config:
+      id-type: auto
+      logic-delete-field: null
+
+# 业务配置
+ecommerce:
+  jwt:
+    # 生产环境务必改为环境变量注入的随机值，切勿提交到仓库
+    secret: ${ECOMMERCE_JWT_SECRET:ecommerce-shop-jwt-secret-key-2026-please-change-in-production}
+    expire: 604800
+  seckill:
+    # 库存分桶数量：拆桶打散 Redis 热点 key 的单线程瓶颈
+    bucket-count: 10
+    # 防重占位 TTL（秒）
+    dedup-ttl: 3600
+    # 消费幂等标记 TTL（秒），需大于消息重投窗口
+    consumed-ttl: 86400
+    # 补偿任务扫描「未落单流水」的时间阈值（秒）
+    settle-timeout: 30
+    # 消息最大重试次数，超过进死信队列（不能无限重试，会堵住队列）
+    max-retry: 3
+    # 定时任务开关：压测时关掉，手动控制消费节奏；生产可开
+    task-enabled: false
+    consume-batch: 200
+    consumers: 8
+    consume-interval: 200
+    compensate-interval: 10000
+    recover-interval: 30000
+    activity-check: 60000
+    # 限流配置
+    rate-limit:
+      enabled: true
+      # 全局每秒允许通过的请求数（令牌桶，允许突发）
+      global-qps: 2000
+      # 单用户每秒最多 1 次（秒杀限购 1 件，这个值最严）
+      user-qps: 1
+      # 单 IP 每秒最多 5 次（防代理池刷单）
+      ip-qps: 5
+
+# 接口文档
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
+
+# 健康检查
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized
+
+logging:
+  level:
+    root: info
+    com.ecommerce: debug
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"

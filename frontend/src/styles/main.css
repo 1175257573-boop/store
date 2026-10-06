@@ -1,0 +1,174 @@
+:root {
+  --ec-primary: #e4393c;
+  --ec-primary-dark: #c62b2e;
+  --ec-price: #e4393c;
+  --ec-bg: #f5f6f7;
+  --ec-text: #303133;
+  --ec-text-light: #909399;
+  --ec-border: #e4e7ed;
+  --ec-radius: 8px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  background: var(--ec-bg);
+  color: var(--ec-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+/* ---- 通用容器 ---- */
+.container {
+  max-width: 1220px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+/* ---- 价格样式：全站统一，符号小、数字大 ---- */
+.price {
+  color: var(--ec-price);
+  font-weight: 600;
+  font-family: 'DIN Alternate', 'Helvetica Neue', Arial, sans-serif;
+}
+.price-symbol {
+  font-size: 12px;
+}
+.price-value {
+  font-size: 20px;
+}
+.price-origin {
+  color: var(--ec-text-light);
+  text-decoration: line-through;
+  font-size: 13px;
+  margin-left: 8px;
+  font-weight: 400;
+}
+
+/* ---- 商品卡片 ---- */
+.product-card {
+  background: #fff;
+  border-radius: var(--ec-radius);
+  overflow: hidden;
+  cursor: pointer;
+  transition: box-shadow 0.2s, transform 0.2s;
+  display: flex;
+  flex-direction: column;
+}
+.product-card:hover {
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+.product-card .cover {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  background: #f2f3f5;
+  display: block;
+}
+.product-card .info {
+  padding: 10px 12px 14px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.product-card .name {
+  font-size: 14px;
+  line-height: 1.4;
+  height: 39px;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  margin-bottom: 6px;
+}
+.product-card .name:hover {
+  color: var(--ec-primary);
+}
+.product-card .sub {
+  font-size: 12px;
+  color: var(--ec-text-light);
+  margin-bottom: 8px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.product-card .footer {
+  margin-top: auto;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.product-card .sales {
+  font-size: 12px;
+  color: var(--ec-text-light);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 16px;
+}
+@media (max-width: 1100px) {
+  .grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+@media (max-width: 800px) {
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ---- 区块标题 ---- */
+.section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 24px 0 14px;
+}
+.section-title h2 {
+  margin: 0;
+  font-size: 20px;
+  position: relative;
+  padding-left: 12px;
+}
+.section-title h2::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 18px;
+  background: var(--ec-primary);
+  border-radius: 2px;
+}
+
+.card-box {
+  background: #fff;
+  border-radius: var(--ec-radius);
+  padding: 20px;
+}
+
+.empty-tip {
+  text-align: center;
+  padding: 60px 0;
+  color: var(--ec-text-light);
+}
+
+.text-ellipsis {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
