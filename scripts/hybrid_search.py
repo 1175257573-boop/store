@@ -167,7 +167,10 @@ def bm25_search(query, limit=CANDIDATE_SIZE):
         "WHERE MATCH(c.title, c.content, c.keywords) AGAINST('{q}' IN BOOLEAN MODE) "
         "ORDER BY score DESC LIMIT " + str(int(limit)) + ";",
         q=expr)
-    return [{"id": r["chunk_id"], "source": "product_chunk",
+    # ID 必须带 chunk_ 前缀，与 export_kb_for_vector.py 的产出保持一致。
+    # 不一致的后果：融合时与向量库/meta 对不上，
+    # 单路对比测试会把相关项全判为不相关（曾导致误判「融合比纯向量差」）。
+    return [{"id": "chunk_" + r["chunk_id"], "source": "product_chunk",
              "product_id": r["product_id"], "chunk_type": r["chunk_type"],
              "title": r["title"], "content": r["content"],
              "weight": int(r["weight"] or 1),

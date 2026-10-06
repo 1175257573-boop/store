@@ -40,7 +40,10 @@ import os
 import sys
 import time
 
-MODEL_NAME = "Qwen/Qwen3-Embedding-0.6B"
+# 本地已下载的模型目录。优先用本地：ModelScope 与 HF 权重同架构，
+# 但指向本地目录可避免每次联网检查版本（离线环境也能跑）。
+LOCAL_MODEL = "E:/WorkBuddy/Temp/models/qwen3emb06b"
+MODEL_NAME = LOCAL_MODEL if os.path.exists(LOCAL_MODEL) else "Qwen/Qwen3-Embedding-0.6B"
 EXPORT_JSONL = "E:/WorkBuddy/Temp/kb_vector_export.jsonl"
 OUT_NPZ = "E:/WorkBuddy/Temp/kb_vectors.npz"
 OUT_META = "E:/WorkBuddy/Temp/kb_meta.json"
