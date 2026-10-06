@@ -1,6 +1,5 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { useUserStore } from '@/stores/user'
 
 /**
  * 路由配置
@@ -111,7 +110,7 @@ const merchantRoutes = [
         // 用 store 的 isAdmin 判断（内部含 JWT 兜底）。
         // 自己读 localStorage 会绕过兜底：旧版缓存里没有 role 字段时，
         // 管理员会被判成普通用户而落到「申请入驻」页。
-        redirect: () => (useUserStore().isAdmin ? '/merchant/audit' : '/merchant/dashboard')
+        redirect: () => (readRole() === 2 ? '/merchant/audit' : '/merchant/dashboard')
       },
       { path: 'dashboard', name: 'merchant-dashboard',
         component: () => import('@/views/merchant/DashboardView.vue'),
@@ -145,6 +144,38 @@ const router = createRouter({
   scrollBehavior: () => ({ top: 0 })
 })
 
+/**
+ * 从 JWT 载荷读角色。
+ *
+ * <p><b>为什么守卫不用 store</b>：{@code app.use(createPinia())} 创建的是
+ * 一个实例，而路由守卫在 {@code app.mount()} 之前就已执行（首次导航由 mount 触发），
+ * 此时模块级的隐式 Pinia 尚未与 app 绑定，{@code useUserStore()} 拿到的是
+ * <b>另一个 store 实例</b>，其中的 role 全是默认值 → 管理员被误判成普通用户，
+ * 被甩到「申请入驻」页，页面看起来就是空的。</p>
+ *
+ * <p>JWT 载荷是登录时服务端签发的权威数据，且纯同步可读、不依赖任何框架时序，
+ * 是路由守卫这种「早期执行」场景唯一可靠的数据源。</p>
+ */
+function readRole() {
+  try {
+    const raw = localStorage.getItem('user')
+    if (raw) {
+      const r = JSON.parse(raw)?.role
+      if (typeof r === 'number') return r
+    }
+  } catch (e) { /* localStorage 脏数据，落到 JWT */ }
+  try {
+    const token = localStorage.getItem('token')
+    if (!token) return null
+    const parts = token.split('.')
+    if (parts.length !== 3) return null
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))
+    return typeof payload.role === 'number' ? payload.role : null
+  } catch (e) {
+    return null
+  }
+}
+
 router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('token')
   if (to.meta.requiresAuth && !token) {
@@ -162,9 +193,9 @@ router.beforeEach((to, from, next) => {
   // 这里只做粗判（页面级），细粒度数据隔离在后端 SQL 里做——
   // 前端守卫挡的是误入，后端挡的才是越权。
   if (to.meta.requiresMerchant || to.meta.requiresAdmin || to.meta.merchantOnly) {
-    // 用 store 里的 role（内部含 JWT 兜底），不要自己读 localStorage：
-    // 旧版缓存的 user 对象没有 role 字段，直接读会把管理员误判成普通用户
-    const { isMerchant, isAdmin } = useUserStore()
+    const role = readRole()
+    const isMerchant = role === 1
+    const isAdmin = role === 2
 
     // 管理员专属页
     if (to.meta.requiresAdmin && !isAdmin) {

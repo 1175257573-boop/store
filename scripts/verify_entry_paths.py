@@ -150,11 +150,12 @@ check("merchant 命令指向概览页",
 print("\n【4】路由默认重定向")
 print("-" * 70)
 
-redirect_ok = "useUserStore().isAdmin ? '/merchant/audit' : '/merchant/dashboard'" in router
+redirect_ok = "readRole() === 2 ? '/merchant/audit' : '/merchant/dashboard'" in router
 check("/merchant 默认重定向按角色分流", redirect_ok, "未找到按角色分流的函数式重定向")
-check("重定向复用 store 而非直接读 localStorage",
-      redirect_ok and "JSON.parse(raw)" not in router.split("children: [")[1][:800],
-      "重定向自己读 localStorage 会绕过 JWT 兜底")
+# 守卫与重定向都用 readRole 同步读，不依赖 Pinia 时序
+check("重定向用 readRole 同步判断（不受 Pinia 时序影响）",
+      redirect_ok and "function readRole()" in router,
+      "重定向应直接读 JWT/localStorage")
 
 # ----------------------------------------------------------------
 print("\n【5】侧边栏菜单项")

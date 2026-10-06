@@ -77,17 +77,35 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   DataLine, Goods, List, RefreshLeft, Shop, Stamp,
   DocumentChecked, ArrowLeft, Bell
 } from '@element-plus/icons-vue'
 import { getMyShop, getDashboardBadges, getAdminTodo } from '@/api/merchant'
-import { useUserStore } from '@/stores/user'
+import { roleFromToken } from '@/stores/user'
 
 const route = useRoute()
-const userStore = useUserStore()
+
+/**
+ * 管理员身份同步判断，不依赖 store。
+ *
+ * <p>store 的 isAdmin 在 Pinia 尚未与 app 绑定时可能是默认值 false
+ * （守卫早于 mount 执行就会踩到），导致管理员看到的是商家菜单。</p>
+ *
+ * <p>这里直接从 localStorage / JWT 读，与 router 守卫同一套逻辑，
+ * 保证「守卫放行」与「菜单显示」判断一致。</p>
+ */
+function readIsAdmin() {
+  try {
+    const raw = localStorage.getItem('user')
+    if (raw && typeof JSON.parse(raw)?.role === 'number') {
+      return JSON.parse(raw).role === 2
+    }
+  } catch (e) { /* 落到 JWT */ }
+  return roleFromToken(localStorage.getItem('token')) === 2
+}
 
 const shopName = ref('商家中心')
 const statusText = ref('正常')
@@ -104,7 +122,7 @@ const adminTodo = ref({ applyPending: 0, productPending: 0, total: 0 })
  * 这里直接读 userInfo?.role 会绕过兜底，管理员被误判成普通用户，
  * 表现是「菜单里没有审核项，且被守卫重定向到申请入驻页」。
  */
-const isAdmin = computed(() => userStore.isAdmin)
+const isAdmin = ref(readIsAdmin())
 const statusClass = computed(() => (status.value === 1 ? '' : 'frozen'))
 
 async function loadShop() {
@@ -154,6 +172,8 @@ async function loadBadges() {
 }
 
 onMounted(() => {
+  // 挂载后再同步一次身份，确保菜单按正确角色渲染
+  isAdmin.value = readIsAdmin()
   loadShop()
   loadBadges()
   // 审核页处理完会派发 todo-changed，这里重新拉待办数让红点实时减少

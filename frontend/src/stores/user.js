@@ -96,3 +96,6 @@ export const useUserStore = defineStore('user', () => {
     setLogin, setProfile, logout, fetchProfile
   }
 })
+
+// 供布局等非 store 组件复用：Pinia 尚未就绪时也能同步判断角色
+export { roleFromToken }

@@ -105,9 +105,10 @@ check("导出 role 供路由守卫使用",
       "return 里没有导出 role")
 
 guard = router.split("router.beforeEach")[-1]
-check("路由守卫复用 store 而非自己读 localStorage",
-      "useUserStore()" in guard and "JSON.parse(raw)" not in guard,
-      "守卫不应重复解析 localStorage")
+# 守卫不能用 store：Pinia 在 mount 前未与 app 绑定，isAdmin 恒 false
+check("路由守卫用 readRole 同步判断而非 store",
+      "function readRole()" in router and "useUserStore()" not in guard,
+      "守卫应直接读 JWT/localStorage，不依赖 Pinia 时序")
 
 # ----------------------------------------------------------------
 print("\n【3】按角色区分可见菜单")
@@ -119,10 +120,8 @@ check("商家页面用 merchantOnly 标记",
 check("管理员访问商家页会被引导",
       "to.meta.merchantOnly && isAdmin" in guard,
       "管理员没有自己的店，不应进经营页")
-# 重定向应复用 store 的 isAdmin（内部含 JWT 兜底），
-# 而不是自己读 localStorage 判角色
 check("默认落地页按角色分流",
-      "useUserStore().isAdmin ? '/merchant/audit'" in router,
+      "readRole() === 2 ? '/merchant/audit'" in router,
       "管理员进 /merchant 应落到审核页")
 
 # ----------------------------------------------------------------

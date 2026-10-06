@@ -145,13 +145,17 @@ print("-" * 70)
 layout = open(f"{FRONTEND}/layout/MerchantLayout.vue", encoding="utf-8").read()
 router = open(f"{FRONTEND}/router/index.js", encoding="utf-8").read()
 
-check("MerchantLayout 用 store 的 isAdmin",
-      "userStore.isAdmin" in layout and "userInfo?.role === 2" not in layout,
-      "仍在直接读 userInfo.role，会绕过 JWT 兜底")
-check("默认重定向用 store 的 isAdmin",
-      "useUserStore().isAdmin" in router and
-      "JSON.parse(raw)" not in router.split("children:")[1][:600],
-      "重定向自己读 localStorage 会绕过兜底")
+# 守卫与布局都不能依赖 store：Pinia 在 mount 前未与 app 绑定，
+# 拿到的是另一个实例，isAdmin 恒为 false。必须用 readRole 同步读。
+check("MerchantLayout 用同步的 readIsAdmin（不依赖 store）",
+      "readIsAdmin()" in layout and "userStore.isAdmin" not in layout,
+      "布局不应依赖 store 的 isAdmin")
+check("MerchantLayout 有 JWT 兜底",
+      "roleFromToken" in layout,
+      "localStorage 无 role 时应落到 JWT 解析")
+check("默认重定向用 readRole",
+      "readRole() === 2" in router,
+      "重定向应用 readRole 同步判断")
 
 # 红点相关
 check("管理员菜单有红点角标",
@@ -175,9 +179,9 @@ check("管理员待办汇总提示",
 print("\n【5】管理员不会被引导去入驻")
 print("-" * 70)
 
-check("路由守卫复用 store",
-      "useUserStore()" in router.split("beforeEach")[-1],
-      "守卫应复用 store 的计算属性")
+check("路由守卫用 readRole 同步判断",
+      "function readRole()" in router and "const role = readRole()" in router,
+      "守卫应直接读 JWT/localStorage，不依赖 store")
 check("管理员进商家页会被引导回审核",
       "to.meta.merchantOnly && isAdmin" in router,
       "管理员无自己的店铺，应跳回审核页")
