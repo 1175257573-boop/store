@@ -176,7 +176,7 @@ CREATE TABLE IF NOT EXISTS `t_product_spec_value` (
 CREATE TABLE IF NOT EXISTS `t_product_sku` (
   `id`          BIGINT         NOT NULL AUTO_INCREMENT COMMENT 'SKU ID',
   `product_id`  BIGINT         NOT NULL COMMENT '商品ID',
-  `merchant_id` BIGINT         NOT NULL COMMENT '所属商家ID（冗余，便于按商家查）',
+  `merchant_id` BIGINT         NULL     COMMENT '所属商家ID（冗余，便于按商家查）；平台自建商品为 NULL',
   `spec_text`   VARCHAR(200)   NOT NULL COMMENT '规格组合文本，如 "红色 / 256GB"',
   `price`       DECIMAL(10,2)  NOT NULL COMMENT 'SKU售价',
   `stock`       INT            NOT NULL DEFAULT 0 COMMENT 'SKU库存',

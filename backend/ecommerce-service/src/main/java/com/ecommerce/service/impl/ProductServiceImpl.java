@@ -12,6 +12,7 @@ import com.ecommerce.dao.entity.Category;
 import com.ecommerce.dao.entity.Product;
 import com.ecommerce.dao.mapper.CategoryMapper;
 import com.ecommerce.dao.mapper.ProductMapper;
+import com.ecommerce.dao.mapper.ProductSkuMapper;
 import com.ecommerce.service.ProductService;
 import com.ecommerce.service.util.RedisCacheUtil;
 import com.ecommerce.service.vo.ProductDetailVO;
@@ -36,6 +37,7 @@ import java.util.stream.Collectors;
 public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> implements ProductService {
 
     private final CategoryMapper categoryMapper;
+    private final ProductSkuMapper skuMapper;
     private final RedisCacheUtil cacheUtil;
 
     /** 分类缓存 1 天 */
@@ -119,6 +121,13 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
             vo.setSales(latest.getSales());
             vo.setViewCount(latest.getViewCount());
         }
+        // SKU 同样每次回查，不进缓存快照。
+        // 原因与上面三个字段一致：SKU 的 price/stock 会被下单流程实时改写，
+        // 缓存里的价格会直接导致用户按旧价下单、库存显示虚高。
+        // 顺带把只有启用中的 SKU 返回给前端，避免买到已下架的规格。
+        vo.setSkuList(skuMapper.selectByProductId(id).stream()
+                .filter(s -> s.getStatus() == null || s.getStatus() == BizConst.YES)
+                .toList());
         return vo;
     }
 

@@ -25,7 +25,7 @@
               <span class="price-label">价格</span>
               <span class="price">
                 <span class="price-symbol">¥</span>
-                <span class="price-value big">{{ product.price }}</span>
+                <span class="price-value big">{{ currentPrice }}</span>
               </span>
               <span v-if="product.originPrice" class="price-origin">¥{{ product.originPrice }}</span>
             </div>
@@ -36,11 +36,33 @@
             </div>
           </div>
 
+          <div v-if="skuOptions.length > 1" class="sku-row">
+            <span class="price-label">规格</span>
+            <div class="sku-list">
+              <button
+                v-for="s in skuOptions"
+                :key="s.id"
+                type="button"
+                class="sku-item"
+                :class="{
+                  active: selectedSku && selectedSku.id === s.id,
+                  disabled: s.stock === 0
+                }"
+                :disabled="s.stock === 0"
+                @click="selectSku(s)"
+              >
+                {{ s.specText }}
+                <span v-if="s.stock === 0" class="sku-out">已售罄</span>
+                <span v-else class="sku-price">¥{{ s.price }}</span>
+              </button>
+            </div>
+          </div>
+
           <div class="stock-row">
             <span class="price-label">库存</span>
-            <span :class="stockClass">{{ product.stock }} 件</span>
-            <el-tag v-if="product.stock === 0" type="danger" size="small">已售罄</el-tag>
-            <el-tag v-else-if="product.stock < 50" type="warning" size="small">仅剩少量</el-tag>
+            <span :class="stockClass">{{ currentStock }} 件</span>
+            <el-tag v-if="currentStock === 0" type="danger" size="small">已售罄</el-tag>
+            <el-tag v-else-if="currentStock < 50" type="warning" size="small">仅剩少量</el-tag>
           </div>
 
           <div class="qty-row">
@@ -48,10 +70,10 @@
             <el-input-number
               v-model="quantity"
               :min="1"
-              :max="Math.min(product.stock || 1, 999)"
-              :disabled="product.stock === 0"
+              :max="Math.min(currentStock || 1, 999)"
+              :disabled="currentStock === 0"
             />
-            <span class="subtotal-hint" v-if="product.stock > 0">
+            <span class="subtotal-hint" v-if="currentStock > 0">
               小计 <b class="price">¥{{ subtotal }}</b>
             </span>
           </div>
@@ -60,7 +82,7 @@
             <el-button
               type="warning"
               size="large"
-              :disabled="product.stock === 0"
+              :disabled="currentStock === 0"
               @click="onAddCart"
             >
               加入购物车
@@ -68,7 +90,7 @@
             <el-button
               type="danger"
               size="large"
-              :disabled="product.stock === 0"
+              :disabled="currentStock === 0"
               @click="onBuyNow"
             >
               立即购买
@@ -127,14 +149,38 @@ const loading = ref(true)
 const product = ref(null)
 const related = ref([])
 const quantity = ref(1)
+const selectedSku = ref(null)
 
-const subtotal = computed(() => {
-  if (!product.value) return '0.00'
-  return (product.value.price * quantity.value).toFixed(2)
+// 可售规格。后端详情接口返回 skuList，空数组表示未配置多规格，
+// 此时按商品本身的 price/stock 展示（单规格商品的老逻辑）。
+const skuOptions = computed(() => product.value?.skuList || [])
+
+// 当前价/库存跟随选中规格；未选（或无规格）时回落到商品主字段
+const currentPrice = computed(() => {
+  if (selectedSku.value) return Number(selectedSku.value.price).toFixed(2)
+  return product.value ? Number(product.value.price).toFixed(2) : '0.00'
 })
 
+const currentStock = computed(() => {
+  if (selectedSku.value) return selectedSku.value.stock || 0
+  return product.value?.stock || 0
+})
+
+const subtotal = computed(() => {
+  const p = Number(currentPrice.value)
+  return (Number.isNaN(p) ? 0 : p * quantity.value).toFixed(2)
+})
+
+// 切换规格：数量上限要跟着新库存收敛，
+// 否则会出现「选了只剩 1 件的规格，数量还是 5」导致下单失败
+function selectSku(s) {
+  if (s.stock === 0) return
+  selectedSku.value = s
+  if (quantity.value > s.stock) quantity.value = Math.max(1, s.stock)
+}
+
 const stockClass = computed(() => {
-  const s = product.value?.stock || 0
+  const s = currentStock.value
   if (s === 0) return 'out-of-stock'
   if (s < 50) return 'low-stock'
   return ''
@@ -146,6 +192,10 @@ async function loadDetail() {
     const res = await getProductDetail(route.params.id)
     product.value = res.data
     quantity.value = 1
+    // 默认选中第一个有货规格。必须挑有库存的：
+    // 排在前面的规格可能已售罄，自动选中会让用户一进页面就看到「已售罄」。
+    const skus = res.data?.skuList || []
+    selectedSku.value = skus.find((s) => s.stock > 0) || null
     const rel = await getRelatedProducts(route.params.id, 5)
     related.value = rel.data || []
   } catch (e) {
@@ -165,11 +215,18 @@ async function onAddCart() {
     router.push({ path: '/login', query: { redirect: route.fullPath } })
     return
   }
-  if (product.value.stock < quantity.value) {
-    ElMessage.error(`库存仅剩 ${product.value.stock} 件`)
+  // 库存校验用当前规格的库存，不是商品总库存 ——
+  // 否则会出现「选了只剩 1 件的规格，校验却按商品总库存放行」，
+  // 下单时才失败，用户已经点了加入购物车。
+  if (currentStock.value < quantity.value) {
+    ElMessage.error(`该规格仅剩 ${currentStock.value} 件`)
     return
   }
   try {
+    // 注意：购物车接口目前只接受 productId，不接受 skuId，
+    // 所以加购仍按商品维度记录。规格选择在本次改动里
+    // 只影响「展示哪档价格 / 按哪档库存做校验」，
+    // 真正按 SKU 落单需要后端购物车表加 skuId 字段。
     await addToCart({ productId: product.value.id, quantity: quantity.value })
     ElMessage.success('已加入购物车')
     // 通知顶栏刷新角标
@@ -260,12 +317,67 @@ onMounted(loadDetail)
 }
 
 .stock-row,
+.sku-row,
 .qty-row {
   display: flex;
   align-items: center;
   gap: 10px;
   margin-bottom: 18px;
   font-size: 14px;
+}
+
+/* 规格选择：横向排列，换行自动折行 */
+.sku-row {
+  align-items: flex-start;
+}
+
+.sku-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sku-item {
+  padding: 6px 12px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 13px;
+  color: #555;
+  transition: all 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sku-item:hover:not(.disabled) {
+  border-color: #e4393c;
+  color: #e4393c;
+}
+
+.sku-item.active {
+  border-color: #e4393c;
+  background: #fef0f0;
+  color: #e4393c;
+}
+
+.sku-item.disabled {
+  cursor: not-allowed;
+  color: #c0c4cc;
+  background: #f7f8fa;
+  text-decoration: line-through;
+}
+
+.sku-price {
+  color: #e4393c;
+  font-size: 12px;
+}
+
+.sku-item.disabled .sku-price,
+.sku-out {
+  color: #c0c4cc;
+  font-size: 12px;
 }
 .low-stock {
   color: #e6a23c;

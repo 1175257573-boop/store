@@ -3,11 +3,13 @@ package com.ecommerce.service.vo;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import com.ecommerce.dao.entity.Product;
+import com.ecommerce.dao.entity.ProductSku;
 import lombok.Data;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 商品详情 VO。
@@ -44,6 +46,16 @@ public class ProductDetailVO implements Serializable {
     private Integer status;
 
     private LocalDateTime createTime;
+
+    /**
+     * 可售规格列表。
+     * <p>由 {@code ProductServiceImpl.getDetail} 单独查询填充 ——
+     * {@link #from(Product, String)} 只负责商品自身字段，不碰 SKU。
+     * 之所以不塞进 from()：SKU 是独立表，要走 skuMapper 查，
+     * 而 from() 是纯 POJO 转换，不该有 IO 行为。
+     * <p>为空表示该商品未配置多规格，前端应按单规格（price/stock）展示。
+     */
+    private List<ProductSku> skuList;
 
     public static ProductDetailVO from(Product product, String categoryName) {
         ProductDetailVO vo = new ProductDetailVO();
