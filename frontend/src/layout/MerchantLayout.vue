@@ -43,13 +43,17 @@
              路径必须与 router/index.js 的定义严格对应：
                audit         -> 入驻审核（ApplyAuditView）
                product-audit -> 商品审核（ProductAuditView）
-             /merchant/apply 是「用户提交入驻申请」页，管理员不该出现在这里。 -->
-        <el-menu-item v-if="isAdmin" index="/merchant/audit">
+             /merchant/apply 是「用户提交入驻申请」页，管理员不该出现在这里。
+
+             红点用绝对定位挂在标签右上角，而不是当普通流内元素：
+             el-badge 是 inline-block，放在 flex 菜单项里会被拉伸，
+             垂直居中后视觉上偏下，且菜单项高度不一致时位置会漂。 -->
+        <el-menu-item v-if="isAdmin" index="/merchant/audit" class="menu-item-with-badge">
           <el-icon><Stamp /></el-icon>入驻审核
           <el-badge v-if="adminTodo.applyPending > 0"
                     :value="adminTodo.applyPending" class="menu-badge" />
         </el-menu-item>
-        <el-menu-item v-if="isAdmin" index="/merchant/product-audit">
+        <el-menu-item v-if="isAdmin" index="/merchant/product-audit" class="menu-item-with-badge">
           <el-icon><DocumentChecked /></el-icon>商品审核
           <el-badge v-if="adminTodo.productPending > 0"
                     :value="adminTodo.productPending" class="menu-badge" />
@@ -264,8 +268,35 @@ function refreshTodo() {
   background: #fdf0f0;
   color: var(--ec-primary);
 }
+/* 红点：绝对定位到菜单项右上角。
+   不能用 margin-left:auto 让它跟在文字后面 —— el-badge 是 inline-block，
+   在 flex 容器里会被拉伸，垂直居中后视觉偏下，菜单项高度不同还会漂。 */
+.menu-item-with-badge {
+  position: relative;
+}
+
 .menu-badge {
-  margin-left: auto;
+  position: absolute;
+  top: 7px;
+  right: 14px;
+  margin-left: 0;
+  /* el-badge 默认继承父元素高度，这里显式收窄，
+     否则容器会和菜单项等高，内部数字被挤到中下部 */
+  height: auto;
+  line-height: 1;
+}
+
+.menu-badge :deep(.el-badge__content) {
+  position: static;      /* 覆盖 el-badge 自带的绝对定位，交给父级控制 */
+  transform: none;
+  box-shadow: none;
+  height: 16px;
+  line-height: 16px;
+  padding: 0 5px;
+  font-size: 11px;
+  font-weight: 500;
+  border: none;
+  top: auto;
 }
 
 .todo-hint {
