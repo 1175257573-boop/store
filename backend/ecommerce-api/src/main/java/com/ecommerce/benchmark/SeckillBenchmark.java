@@ -399,18 +399,27 @@ public class SeckillBenchmark {
                         ? conn.getErrorStream() : conn.getInputStream());
                 long us = (System.nanoTime() - t0) / 1000;
 
+                // 业务码必须取 data.code（秒杀结果码：0=成功 2=售罄 7=限流...），
+                // 不能取外层信封的 code —— 那是 HTTP 语义，恒为 200，
+                // 拿它做统计会让「业务码分布 100% code=200」完全失真。
                 int bizCode = -99;
-                int idx = resp.indexOf("\"code\":");
-                if (idx >= 0) {
-                    int end = resp.indexOf(',', idx);
-                    if (end < 0) {
-                        end = resp.length();
-                    }
-                    try {
-                        bizCode = Integer.parseInt(
-                                resp.substring(idx + 7, end).replaceAll("[^0-9]", ""));
-                    } catch (NumberFormatException ignore) {
-                        bizCode = -98;
+                int dataIdx = resp.indexOf("\"data\":");
+                if (dataIdx >= 0) {
+                    int idx = resp.indexOf("\"code\":", dataIdx);
+                    if (idx >= 0) {
+                        int end = resp.indexOf(',', idx);
+                        if (end < 0) {
+                            end = resp.indexOf('}', idx);
+                        }
+                        if (end < 0) {
+                            end = resp.length();
+                        }
+                        try {
+                            bizCode = Integer.parseInt(
+                                    resp.substring(idx + 7, end).replaceAll("[^0-9]", ""));
+                        } catch (NumberFormatException ignore) {
+                            bizCode = -98;
+                        }
                     }
                 }
                 return new Result(bizCode, us, status == 200,
