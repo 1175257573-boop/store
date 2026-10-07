@@ -47,7 +47,10 @@ print("=" * 60)
 # ---------- 1. 公开接口 ----------
 print("\n[1] 公开浏览接口（无需登录）")
 code, msg, data = call("GET", "/product/categories")
-check("分类列表可访问", code == 200 and data and len(data) == 6,
+# 不写死分类数量：补演示商品时扩了分类（原 6 个 → 现 8 个），
+# 写死会变成噪音断言 —— 每次改数据都要跟着改测试。
+# 真正要保证的是「接口通、且有数据」。
+check("分类列表可访问", code == 200 and data and len(data) >= 6,
       f"code={code} len={len(data) if data else 0} msg={msg}")
 categories = data or []
 
