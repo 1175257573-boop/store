@@ -58,5 +58,13 @@
             <artifactId>fastjson2</artifactId>
             <version>2.0.51</version>
         </dependency>
+        <!-- 测试：意图识别器这类纯逻辑必须有单测。
+             它的准确率直接决定客服答得对不对，
+             而正则规则容易在后续改动中被无意破坏（改一个关键词就可能影响几条用例）。 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 </project>

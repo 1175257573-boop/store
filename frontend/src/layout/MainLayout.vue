@@ -93,23 +93,53 @@
         <p class="sub">本站为教学演示项目，商品与价格均为虚构信息</p>
       </div>
     </footer>
+
+    <!-- 智能客服浮动窗口：全站可用。
+         productName 从商品详情页透传，详情页会自动锁定该商品。 -->
+    <ChatWidget :product-name="chatProductName" />
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Search, HomeFilled, ShoppingCart, List, User, ArrowDown, Lightning, Shop
 } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
-import { getCartCount } from '@/api'
+import { getCartCount, getProductDetail } from '@/api'
+import ChatWidget from '@/components/ChatWidget.vue'
 
 const router = useRouter()
+const route = useRoute()
 const userStore = useUserStore()
 const keyword = ref('')
 const cartCount = ref(0)
+
+/**
+ * 当前浏览的商品名，传给客服做上下文锁定。
+ *
+ * 在详情页时带上商品名，用户问「续航怎么样」客服就知道是哪一款；
+ * 离开详情页清空，避免拿上一页的商品回答当前页的问题。
+ */
+const chatProductName = ref('')
+
+async function syncChatProduct() {
+  const id = route.params.id
+  if (route.name === 'product-detail' && id) {
+    try {
+      const res = await getProductDetail(id)
+      chatProductName.value = res.data?.name || ''
+    } catch (e) {
+      chatProductName.value = ''
+    }
+  } else {
+    chatProductName.value = ''
+  }
+}
+
+watch(() => route.fullPath, syncChatProduct)
 
 /** 拉取购物车角标 */
 async function refreshCartCount() {
@@ -154,6 +184,8 @@ async function onCommand(cmd) {
 
 onMounted(() => {
   refreshCartCount()
+  // 首次进入也要同步一次：直接访问详情页 URL 时 watch 不会触发
+  syncChatProduct()
   // 全局事件：加购/下单后由页面触发刷新角标，避免层层透传
   window.addEventListener('cart-change', refreshCartCount)
 })

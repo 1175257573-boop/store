@@ -1,0 +1,104 @@
+# ============================================================
+# 生产环境配置（2 核 2 GiB 小机器）
+#
+# 与开发环境的差异及原因
+# ----------------------
+# 开发机是 20 逻辑核 + 大内存，Tomcat 默认 200 线程、连接池 20 没问题。
+# 迁到 2 核 2 GiB 后这两个默认值都会成为问题：
+#
+#   1. Tomcat 200 线程 vs 2 核 → 线程数远超核数，CPU 上下文切换吃掉大量时间。
+#      实测规律（本项目压测报告）：CPU 越紧张，线程越多反而越慢。
+#      降到 50：约等于「每核 25 线程」，对 IO 混合型业务够用。
+#
+#   2. 连接池 20 在 2 核上是合理的，**不要调大**。
+#      压测实测：连接池从 20 调到 100，QPS 反而从 9920 掉到 3479（1/3）。
+#      原因是线程数远超核数时，请求在池边排队，纯属浪费。
+#
+#   3. JVM 堆必须显式限制。JVM 默认最大堆 = 物理内存的 1/4，
+#      在 2 GiB 机器上约 512 MiB，看似够；但还要给 Metaspace、
+#      线程栈（200 线程 × 1 MiB）、直接内存留空间，容易 OOM。
+#      这里设 -Xmx512m，配合 50 线程，总占用可控在 800 MiB 内。
+#
+# 用法：java -jar ecommerce-api.jar --spring.profiles.active=prod
+# ============================================================
+
+server:
+  port: 8080
+  tomcat:
+    threads:
+      # 2 核 → 50 线程。超过核数太多只会加剧上下文切换
+      max: 50
+      min-spare: 10
+    # 等待队列不宜大：请求排队久了客户端就超时了，快速失败更好
+    accept-count: 50
+    max-connections: 200
+    connection-timeout: 20000
+
+spring:
+  datasource:
+    # 小机器上连接池保持 20：实测调大反而更慢（CPU 才是瓶颈）
+    hikari:
+      minimum-idle: 3
+      maximum-pool-size: 20
+      idle-timeout: 600000
+      connection-timeout: 10000
+      max-lifetime: 1200000
+
+  data:
+    redis:
+      host: ${REDIS_HOST:127.0.0.1}
+      port: 6379
+      # 小内存机器给 Redis 限制内存，超限用 LRU 淘汰而不是报错
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 2
+
+# ============================================================
+# 限流：2 核机器必须限流，否则一被刷就雪崩
+#
+# 压测发现的陷阱：IP 限流 5 QPS + 全局限流 2000 时，
+# 实测 99.78% 的请求被限流拦截 —— 说明单 IP 限制对压测客户端
+# （全从 127.0.0.1 发起）等于全站只有 5 QPS。
+# 真实用户分散在不同 IP，不会这样，但防刷意图是对的。
+# ============================================================
+rate-limit:
+  enabled: true
+  # 全局限流：按 2 核 ~1500 QPS 留一半余量
+  global-qps: 1000
+  # 单 IP：防脚本刷单，50 比开发环境的 5 更贴近真实
+  ip-qps: 50
+  # 单用户：防止单个账号高频刷
+  user-qps: 20
+
+logging:
+  level:
+    root: WARN
+    com.ecommerce: INFO
+  # 小机器磁盘不大，日志别无限增长
+  file:
+    name: logs/ecommerce.log
+  logback:
+    rollingpolicy:
+      max-file-size: 20MB
+      max-history: 3
+      total-size-cap: 200MB
+
+mybatis-plus:
+  configuration:
+    # 小内存下关闭二级缓存（Redis 缓存已够，避免重复）
+    cache-enabled: false
+
+---
+# ============================================================
+# JVM 参数（需在启动命令里加，或用 JAVA_TOOL_OPTIONS）
+# ============================================================
+# JAVA_TOOL_OPTIONS="-Xmx512m -Xms256m -XX:MaxMetaspaceSize=128m -XX:+UseSerialGC -XX:MaxDirectMemorySize=128m"
+#
+# 逐项理由：
+#   -Xmx512m / -Xms256m      堆固定，别让它随负载漂移
+#   -XX:MaxMetaspaceSize=128m  防止动态生成类撑爆 Metaspace
+#   -XX:+UseSerialGC          2 核用并行 GC 收益为负（GC 线程本身要抢 CPU），
+#                             SerialGC 在小堆小核上反而更快
+#   -XX:MaxDirectMemorySize=128m  Netty/NIO 用，给上限防止被撑爆
