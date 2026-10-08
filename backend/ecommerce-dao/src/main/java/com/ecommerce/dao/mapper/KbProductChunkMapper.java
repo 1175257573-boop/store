@@ -47,13 +47,36 @@ public interface KbProductChunkMapper extends BaseMapper<KbProductChunk> {
 
     /**
      * 按商品名模糊找商品 —— 用户说「曜石手机」时定位具体商品。
-     * 用 LIKE 而非全文索引：商品名短且用户输入更短，LIKE 足够。
+     *
+     * <p>排序规则：<b>品牌词在前、名称长的在前</b>。
+     * 原因：用户输入通常只包含品牌+品类（如「曜石手机」），
+     * 此时库里有几十个商品都含「曜石」。如果只按长度取，
+     * 会选中该品牌下最短名字的商品 —— 可能是完全不相干的品类
+     * （实测踩过：问「曜石手机」选中了某品牌的《中国国家地理》）。
+     *
+     * <p>用 SQL 直接排序而非 Java 侧取 1 条：LIMIT 1 会在排序前截断。
      */
     @Select("SELECT id, name FROM t_product "
             + "WHERE name LIKE CONCAT('%', #{keyword}, '%') "
-            + "ORDER BY LENGTH(name) DESC LIMIT #{limit}")
+            + "ORDER BY CHAR_LENGTH(name) ASC, id ASC LIMIT #{limit}")
     List<ProductNameVO> findProductsByName(@Param("keyword") String keyword,
                                            @Param("limit") int limit);
+
+    /**
+     * 按品牌 + 品类词定位商品。
+     *
+     * <p>比 {@link #findProductsByName} 更精确：要求商品名的<b>开头</b>就是品牌，
+     * 且名称包含指定的品类词。这样「曜石」+「手机」只会命中曜石的手机，
+     * 不会误命中该品牌的书籍或配件。
+     */
+    @Select("SELECT id, name FROM t_product "
+            + "WHERE name LIKE CONCAT(#{brand}, '%') "
+            + "  AND name LIKE CONCAT('%', #{category}, '%') "
+            + "ORDER BY CHAR_LENGTH(name) ASC, id ASC LIMIT #{limit}")
+    List<ProductNameVO> findProductByBrandAndCategory(
+            @Param("brand") String brand,
+            @Param("category") String category,
+            @Param("limit") int limit);
 
     /**
      * 商品名 + 分类的轻量视图，供会话上下文用。

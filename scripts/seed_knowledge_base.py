@@ -350,8 +350,14 @@ def main():
     print("=" * 62)
 
     # ---------- 读取目标商品 ----------
-    out = sql(f"SELECT id, category_id, name, subtitle, price, stock "
-              f"FROM t_product WHERE description LIKE '%{TAG}%' ORDER BY id;")
+    # 覆盖全部在售商品，而不只是演示商品。
+    # 原因：客服会问任何商品，若种子商品没有知识块，
+    # 用户会看到「没检索到相关记录」—— 客服对在售商品答不出来是不可接受的。
+    # 排除联调测试残留数据（那些不是真实商品）。
+    out = sql("SELECT id, category_id, name, subtitle, price, stock "
+              "FROM t_product WHERE status = 1 "
+              "  AND name NOT LIKE '联调测试%' AND name <> '枕头' "
+              "ORDER BY id;")
     rows = []
     for line in out.split("\n")[1:]:
         parts = line.split("\t")
@@ -381,16 +387,21 @@ def main():
 
     # ---------- 清理 ----------
     print("\n[2/7] 清理旧知识数据")
+    # 必须与读取条件一致（全部在售商品），否则旧块删不干净，
+    # 新插入会撞唯一键 (product_id, attr_key) / (product_id, spec_text) 而静默失败
     sql("DELETE FROM t_kb_product_chunk WHERE product_id IN "
-        f"(SELECT id FROM t_product WHERE description LIKE '%{TAG}%');")
+        "(SELECT id FROM t_product WHERE status = 1 "
+        " AND name NOT LIKE '联调测试%' AND name <> '枕头');")
     sql("DELETE FROM t_product_attr WHERE product_id IN "
-        f"(SELECT id FROM t_product WHERE description LIKE '%{TAG}%');")
+        "(SELECT id FROM t_product WHERE status = 1 "
+        " AND name NOT LIKE '联调测试%' AND name <> '枕头');")
     # 商品问答按商品清理；通用问答（product_id IS NULL）整体重建。
     # 注意不能写 "WHERE question_kw IS NULL" —— 通用问答都有 question_kw，
     # 那个条件永远匹配不到，导致每次重跑都重复累加。
     sql("DELETE FROM t_kb_faq WHERE product_id IS NULL;")
     sql("DELETE FROM t_kb_faq WHERE product_id IN "
-        f"(SELECT id FROM t_product WHERE description LIKE '%{TAG}%');")
+        "(SELECT id FROM t_product WHERE status = 1 "
+        " AND name NOT LIKE '联调测试%' AND name <> '枕头');")
     sql("DELETE FROM t_kb_shop_knowledge;")
 
     # ---------- 结构化属性 ----------

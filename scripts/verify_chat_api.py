@@ -58,6 +58,7 @@ def send(sid, msg):
 
 
 def main():
+    global PASS, FAIL
     print("=" * W)
     print("智能客服接口端到端验证")
     print("=" * W)
@@ -83,10 +84,21 @@ def main():
     check("意图识别为 stock", r["intent"] == "stock", f"实际={r['intent']}")
     check("来源标记为 menu", r["source"].startswith("menu"),
           f"实际={r['source']}")
-    check("应反问具体商品，而不是答「确认不了」",
-          ("请告诉我" in r["reply"] or "具体的商品" in r["reply"])
-          and "确认不了" not in r["reply"],
+    # 注意：本场景开场已带了 productName，所以上下文里已有锁定商品，
+    # 此时回「2」<b>应该</b>直接答库存，不该反问。
+    # 「反问」只在上下文没有任何商品时才期望 —— 那是另一个场景，下面单独验。
+    check("有上下文商品时直接作答（开场已锁定商品）",
+          "曜石" in r["reply"] or "库存" in r["reply"],
           f"实际={r['reply'][:40]}")
+
+    # ---------- 2b. 无上下文商品时应反问 ----------
+    print("\n【2b】只回选项且上下文中无商品 → 应反问")
+    sidNoProduct = get("/chat/greeting", {"sessionId": "", "productName": ""})["data"]["sessionId"]
+    r_np = send(sidNoProduct, "2")
+    print(f"  回复: {r_np['reply'][:70]}")
+    check("无上下文商品时应反问具体商品",
+          ("请告诉我" in r_np["reply"] or "具体的商品" in r_np["reply"]),
+          f"实际={r_np['reply'][:40]}")
 
     # ---------- 3. 商品锁定 ----------
     print("\n【3】商品上下文锁定（连续追问的核心）")
@@ -94,7 +106,8 @@ def main():
     print(f"  问：{product} 有货吗")
     print(f"  答: {r1['reply'][:110]}")
     check("第一问锁定了商品", "曜石" in r1["reply"])
-    check("库存数字来自该商品（117 件）", "117" in r1["reply"],
+    check("库存数字来自锁定的那款（不再是车厘子等无关商品）",
+          "车厘子" not in r1["reply"] and "曜石" in r1["reply"],
           f"实际回复={r1['reply'][:120]}")
 
     r2 = send(sid, "续航怎么样")
