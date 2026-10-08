@@ -154,7 +154,13 @@ public class ImService {
         int limit = Math.min(Math.max(pageSize, 1), MAX_POLL_LIMIT);
         int offset = (Math.max(pageNum, 1) - 1) * limit;
 
+        // SQL 按 id DESC 出（最新在前），这里反转成正序 ——
+        // 前端直接 append 渲染，拿到正序才能自然显示时间顺序。
+        //
+        // 不用「SQL 内反序」是为了避开 MySQL 5.7 的子查询分页限制；
+        // 反转在 Java 层做，行为可控也更好测。
         List<ImMessage> list = sessionMapper.listHistory(sessionId, offset, limit);
+        java.util.Collections.reverse(list);
         markAsRead(session, sessionId);
         return list;
     }
@@ -207,8 +213,18 @@ public class ImService {
             fromRole = RoleConst.ROLE_MERCHANT;
             toIsBuyer = true;
         } else {
+            // 买家发给商家：to_id 必须是**商家本人**的 user_id，
+            // 不能存 merchant_id —— t_im_message.to_id 的语义是「用户」。
+            //
+            // 存错的后果（实测踩过）：
+            //   1. 商家侧 markRead 按 to_id=商家userId 查，永远查不到买家发的消息 → 未读清不掉
+            //   2. 两类消息的 to_id 语义不一致，轮询/未读统计都会算错
+            Merchant shop = merchantMapper.selectById(session.getMerchantId());
+            if (shop == null) {
+                throw new BusinessException(ResultCode.NOT_FOUND.getCode(), "店铺不存在");
+            }
             fromId = UserContextHolder.requireUserId();
-            toId = session.getMerchantId();
+            toId = shop.getUserId();
             fromRole = RoleConst.ROLE_USER;
             toIsBuyer = false;
         }
@@ -220,12 +236,27 @@ public class ImService {
         m.setToId(toId);
         m.setContent(text);
         m.setReadFlag(0);
-        messageMapper.insert(m);
+        try {
+            messageMapper.insert(m);
+        } catch (Exception e) {
+            log.error("IM 插入消息失败 session={} from={} content={}",
+                    sessionId, fromId, text, e);
+            throw e;
+        }
 
         // 刷新摘要/时间 + 给接收方 +1 未读
         String summary = text.length() > SUMMARY_LENGTH
                 ? text.substring(0, SUMMARY_LENGTH) : text;
-        messageMapper.incrUnread(sessionId, toIsBuyer, summary);
+        try {
+            if (toIsBuyer) {
+                messageMapper.incrBuyerUnread(sessionId, summary);
+            } else {
+                messageMapper.incrMerchantUnread(sessionId, summary);
+            }
+        } catch (Exception e) {
+            log.error("IM 更新未读失败 session={} toIsBuyer={}", sessionId, toIsBuyer, e);
+            throw e;
+        }
         return m.getId();
     }
 

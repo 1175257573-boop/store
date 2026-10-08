@@ -126,9 +126,12 @@ def main():
 
         # ---------- 5. 消息收发 ----------
         print("\n【5】消息收发与未读")
+        # 先清未读，让拉到的消息就是刚发的这条
+        call("POST", "/im/read-all", token=buyer)
         r = call("POST", "/im/message", token=buyer,
                  body={"sessionId": sid1, "content": "这款有货吗？"})
         check("买家可发消息", r.get("code") == 200, f"实际={r}")
+        new_msg_id = (r.get("data") or {}).get("messageId")
 
         r = call("GET", f"/im/message?sessionId={sid1}&pageNum=1&pageSize=20", token=buyer)
         msgs = r.get("data") or []
@@ -137,8 +140,28 @@ def main():
         check("买家能拉到刚发的消息",
               any("这款有货吗" in (m.get("content") or "") for m in msgs),
               f"实际 {len(msgs)} 条，内容={[m.get('content','')[:12] for m in msgs]}")
-        check("消息内容正确", msgs and msgs[0].get("content") == "这款有货吗？",
-              f"实际={msgs[0].get('content') if msgs else '-'}")
+        # 按 messageId 判定，不能按内容/位置 ——
+        # 会话是复用的，历史里可能有同样内容；
+        # 且接口返回是「最新在前」倒序，刚发的在最后一条，
+        # pageSize=20 时新消息可能被挤出这一页。
+        # ⚠️ 接口返回的 id 是**字符串**（MySQL bigint → JSON 序列化为 string），
+        # 而 messageId 从发送响应里取到的是数字 —— 必须转成同一类型再比，
+        # 否则永远匹配不上，还以为是接口漏数据。
+        new_msg_key = str(new_msg_id)
+        hit = [m for m in msgs if str(m.get("id")) == new_msg_key]
+        if not hit:
+            # 第一页没拉到（历史已超过 pageSize），翻页补查
+            all_msgs = []
+            for pg in range(1, 6):
+                batch = call("GET", f"/im/message?sessionId={sid1}&pageNum={pg}",
+                             token=buyer).get("data") or []
+                if not batch:
+                    break
+                all_msgs += batch
+            hit = [m for m in all_msgs if str(m.get("id")) == new_msg_key]
+        check("刚发的消息能在历史里按 id 命中",
+              bool(hit) and hit[0].get("content") == "这款有货吗？",
+              f"id={new_msg_key} 拉到 {len(msgs)} 条，命中={bool(hit)}")
 
         # 商家侧应看到 1 条未读
         r = call("GET", "/im/unread", token=shopA)

@@ -88,8 +88,8 @@ public interface ImSessionMapper extends BaseMapper<ImSession> {
     /**
      * 历史消息（分页，倒序取再反转让前端拿到正序）。
      */
-    @Select("SELECT * FROM (SELECT * FROM t_im_message WHERE session_id = #{sessionId} "
-            + "ORDER BY id DESC LIMIT #{offset}, #{limit}) t ORDER BY id ASC")
+    @Select("SELECT * FROM t_im_message WHERE session_id = #{sessionId} "
+            + "ORDER BY id DESC LIMIT #{offset}, #{limit}")
     List<ImMessage> listHistory(@Param("sessionId") Long sessionId,
                                 @Param("offset") int offset,
                                 @Param("limit") int limit);

@@ -24,8 +24,10 @@
           <router-link to="/" class="nav-item">
             <el-icon><HomeFilled /></el-icon>首页
           </router-link>
-          <router-link to="/seckill" class="nav-item">
-            <el-icon><Lightning /></el-icon>秒杀
+          <router-link to="/seckill" class="nav-item has-badge">
+            <span class="icon-wrap"><el-icon><Lightning /></el-icon><NavBadge :count="seckillOngoing" /></span>秒杀
+            <!-- 秒杀是「机会型」提醒：有进行中的活动就亮，结束自动消失 -->
+            
           </router-link>
           <!-- 入口路径必须按角色分流：管理员没有自己的店铺，
                /merchant/dashboard 是商家页，管理员进去会撞守卫被弹回来。
@@ -42,21 +44,22 @@
             <!-- 商家：待发货/待收货订单 + 待处理售后 + 待审核商品 -->
             <NavBadge :count="merchantBadges.orders + merchantBadges.afterSale" />
           </router-link>
-          <router-link to="/cart" class="nav-item">
-            <el-badge :value="cartCount" :hidden="cartCount === 0" :max="99">
-              <el-icon><ShoppingCart /></el-icon>
-            </el-badge>
-            购物车
+          <!-- 购物车用「数量」语义而非「提醒」语义：
+               角标是用户自己加的东西，始终有值。
+               所以用 neutral 样式（灰底），与红色「有事要处理」区分开。 -->
+          <router-link to="/cart" class="nav-item has-badge">
+            <span class="icon-wrap"><el-icon><ShoppingCart /></el-icon><NavBadge :count="cartCount" variant="count" /></span>购物车
+            
           </router-link>
           <router-link to="/orders" class="nav-item has-badge">
-            <el-icon><List /></el-icon>订单
+            <span class="icon-wrap"><el-icon><List /></el-icon><NavBadge :count="buyerBadges.orders" /></span>订单
             <!-- 买家待处理：待付款 + 已发货待收货 -->
-            <NavBadge :count="buyerBadges.orders" />
+            
           </router-link>
           <router-link v-if="userStore.isLogin" to="/messages" class="nav-item has-badge">
-            <el-icon><ChatDotRound /></el-icon>消息
+            <span class="icon-wrap"><el-icon><ChatDotRound /></el-icon><NavBadge :count="isMerchantView ? merchantBadges.messages : buyerBadges.messages" /></span>消息
             <!-- 买家侧是商家回复的未读；商家侧是买家咨询的未读 -->
-            <NavBadge :count="isMerchantView ? merchantBadges.messages : buyerBadges.messages" />
+            
           </router-link>
 
           <template v-if="userStore.isLogin">
@@ -125,7 +128,8 @@ import {
 import { useUserStore } from '@/stores/user'
 import NavBadge from '@/components/NavBadge.vue'
 import {
-  buyerBadges, merchantBadges, refreshBadges, resetBadges
+  buyerBadges, merchantBadges, refreshBadges, resetBadges,
+  seckillOngoing
 } from '@/composables/useBadge'
 import { getAdminTodo } from '@/api/merchant'
 import { getCartCount, getProductDetail } from '@/api'
@@ -152,6 +156,18 @@ const chatProductName = ref('')
  */
 const isMerchantView = computed(() =>
   userStore.isMerchant || userStore.isAdmin)
+
+/**
+ * 是否窄屏（导航项只显示图标）。
+ *
+ * <p>窄屏下角标要改挂到图标正上方 —— 横向贴右上角会盖住图标。
+ * 监听 resize 而不是只在 mounted 判一次，旋转屏幕/拖窗口也能响应。
+ */
+const isNarrow = ref(window.innerWidth <= 900)
+
+function updateNarrow() {
+  isNarrow.value = window.innerWidth <= 900
+}
 
 /**
  * 管理员待办总数（待审核入驻 + 待审核商品）。
@@ -241,12 +257,14 @@ onMounted(() => {
   window.addEventListener('cart-change', refreshCartCount)
   // 发消息/下单/发货等动作都会改变红点，统一在这里刷新
   window.addEventListener('badge-change', refreshBadges)
+  window.addEventListener('resize', updateNarrow)
   startBadgePolling()
 })
 
 onUnmounted(() => {
   window.removeEventListener('cart-change', refreshCartCount)
   window.removeEventListener('badge-change', refreshBadges)
+  window.removeEventListener('resize', updateNarrow)
   stopBadgePolling()
 })
 
@@ -366,7 +384,10 @@ watch(() => userStore.token, () => {
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 4px;
+  /* 10px 而非 4px：角标要向右突出 6px 骑在图标右上角，
+     gap 至少要比这个大，否则角标会伸进文字区。
+     实测 gap=4px 时角标右缘 969 > 文字左缘 964，压了 5px。 */
+  gap: 10px;
   font-size: 14px;
   color: var(--ec-text);
   cursor: pointer;
@@ -377,10 +398,24 @@ watch(() => userStore.token, () => {
   color: var(--ec-primary);
 }
 
-/* 带红点的导航项需要定位上下文，红点才能贴在图标右上角。
-   没有这行的话红点会往上冒到整个 header 上去。 */
+/* 带角标的导航项需要定位上下文，否则角标会冒到 header 上 */
 .nav-item.has-badge {
   position: relative;
+}
+
+/*
+ * 图标容器 —— 角标的定位基准。
+ *
+ * <p><b>为什么角标要挂图标而不是整个导航项</b>：导航项是
+ * 「图标 + gap(4px) + 文字」的 flex 布局，角标若相对整项定位在右上角，
+ * 会横向伸进文字区压住文案（实测压住了「消息」的「息」字）。
+ * 挂在图标上则天然隔着 gap，<b>结构上不可能压到文字</b>。
+ */
+.icon-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* 窄屏隐藏文字只留图标时，红点往右挪一点，免得压到图标本体 */
@@ -409,11 +444,11 @@ watch(() => userStore.token, () => {
     flex-shrink: 0;      /* 不让图标被压扁 */
     font-size: 13px;
   }
-  /* 文字藏起来，红点就有地方贴了 —— 偏移量回到图标正上方 */
+  /* 窄屏只剩图标：角标往图标右上角收，避免超出图标边界 */
   .nav-item.has-badge .nav-badge,
   .nav-item.has-badge :deep(.nav-badge) {
-    left: 10px;
-    top: -2px;
+    top: -7px;
+    right: -9px;
   }
 }
 .nav-item.router-link-active {

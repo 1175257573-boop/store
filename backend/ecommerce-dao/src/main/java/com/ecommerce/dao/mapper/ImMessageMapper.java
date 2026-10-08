@@ -35,23 +35,29 @@ public interface ImMessageMapper extends BaseMapper<ImMessage> {
      * 后者写不出「到底是买家还是商家该加未读」的分支，
      * 且容易写成 SQL 原子自增时判断不清。
      *
+     /**
+     * 发送消息后：刷新会话摘要 + 给接收方 +1 未读。
+     *
+     * <p>拆成两个方法而不是一个带 {@code <choose>} 的 ——
+     * 实测 {@code @Update} 里的 {@code <choose>} 在本项目会抛 500，
+     * 表现为「消息写进库了但接口报错」，极难排查。
+     *
      * <p>用 SQL 原子自增而非「查出加一再写回」：
      * 后者在并发发消息时会丢计数。
      *
      * @param toIsBuyer true = 接收方是买家（加 buyer_unread）
      */
-    @Update("<script>"
-            + "UPDATE t_im_session SET "
-            + "  <choose>"
-            + "    <when test='toIsBuyer'>buyer_unread = buyer_unread + 1,</when>"
-            + "    <otherwise>merchant_unread = merchant_unread + 1,</otherwise>"
-            + "  </choose>"
-            + "  last_message = #{summary}, last_time = NOW() "
-            + "WHERE id = #{sessionId}"
-            + "</script>")
-    int incrUnread(@Param("sessionId") Long sessionId,
-                   @Param("toIsBuyer") boolean toIsBuyer,
-                   @Param("summary") String summary);
+    @Update("UPDATE t_im_session SET buyer_unread = buyer_unread + 1, "
+            + "last_message = #{summary}, last_time = NOW() "
+            + "WHERE id = #{sessionId}")
+    int incrBuyerUnread(@Param("sessionId") Long sessionId,
+                        @Param("summary") String summary);
+
+    @Update("UPDATE t_im_session SET merchant_unread = merchant_unread + 1, "
+            + "last_message = #{summary}, last_time = NOW() "
+            + "WHERE id = #{sessionId}")
+    int incrMerchantUnread(@Param("sessionId") Long sessionId,
+                           @Param("summary") String summary);
 
     /**
      * 清零买家侧未读。

@@ -1,3 +1,5 @@
+import request from '@/utils/request'
+
 export const seckill = data => request.post('/seckill', data)
 export const querySeckillResult = requestId =>
   request.get('/seckill/result', { params: { requestId } })
