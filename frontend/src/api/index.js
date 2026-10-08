@@ -15,6 +15,13 @@ export const getRelatedProducts = (id, limit = 6) =>
   request.get(`/product/${id}/related`, { params: { limit } })
 export const getCategories = () => request.get('/product/categories')
 
+
+// ===== 店铺 =====
+export const getShopInfo = merchantId => request.get(`/product/shop/${merchantId}`)
+// 店铺主页的商品列表：复用商品列表接口，传 merchantId 即可按店铺筛选
+export const getShopProducts = params =>
+  request.get('/product/list', { params: { sortBy: 'sales', ...params } })
+
 // ===== 购物车 =====
 export const getCart = () => request.get('/cart')
 export const addToCart = data => request.post('/cart', data)

@@ -132,7 +132,11 @@ def main():
 
         r = call("GET", f"/im/message?sessionId={sid1}&pageNum=1&pageSize=20", token=buyer)
         msgs = r.get("data") or []
-        check("买家能拉到自己的消息", len(msgs) == 1, f"实际 {len(msgs)} 条")
+        # 断言「能拉到刚发的消息」，而不是「恰好 1 条」——
+        # 会话是复用的，多轮测试后会累积消息，写死条数必然失败。
+        check("买家能拉到刚发的消息",
+              any("这款有货吗" in (m.get("content") or "") for m in msgs),
+              f"实际 {len(msgs)} 条，内容={[m.get('content','')[:12] for m in msgs]}")
         check("消息内容正确", msgs and msgs[0].get("content") == "这款有货吗？",
               f"实际={msgs[0].get('content') if msgs else '-'}")
 

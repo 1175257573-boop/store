@@ -57,6 +57,9 @@
           <div class="info">
             <div class="name">{{ p.name }}</div>
             <div class="sub">{{ p.subtitle }}</div>
+            <div v-if="p.shopName" class="shop-tag" @click.stop="goShop(p.merchantId)">
+              <el-icon><Shop /></el-icon>{{ p.shopName }}
+            </div>
             <div class="footer">
               <div>
                 <span class="price">
@@ -95,6 +98,7 @@
 import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getProductList, getCategories } from '@/api'
+import { Shop } from '@element-plus/icons-vue'
 
 defineOptions({ name: 'ProductList' })
 
@@ -176,6 +180,10 @@ function goCategory(id) {
   query.pageNum = 1
   syncQuery()
   loadProducts()
+}
+
+function goShop(merchantId) {
+  if (merchantId) router.push(`/shop/${merchantId}`)
 }
 
 function goDetail(id) {

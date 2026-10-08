@@ -63,6 +63,11 @@ const routes = [
         meta: { title: '收货地址', requiresAuth: true }
       },
       {
+        path: 'shop/:merchantId',
+        name: 'shop',
+        component: () => import('@/views/ShopView.vue')
+      },
+      {
         path: 'messages',
         name: 'messages',
         component: () => import('@/views/MessagesView.vue'),

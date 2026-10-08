@@ -172,3 +172,23 @@ a {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+
+/* ---- 商品卡片上的店铺标签：可点进店铺主页 ---- */
+.shop-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--ec-text-light);
+  margin-bottom: 5px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: #f5f6f7;
+  cursor: pointer;
+  max-width: 100%;
+  transition: color 0.15s, background 0.15s;
+}
+.shop-tag:hover {
+  color: var(--ec-primary);
+  background: #fef0f0;
+}
