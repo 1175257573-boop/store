@@ -47,6 +47,9 @@
           <router-link to="/orders" class="nav-item">
             <el-icon><List /></el-icon>订单
           </router-link>
+          <router-link v-if="userStore.isLogin" to="/messages" class="nav-item">
+            <el-icon><ChatDotRound /></el-icon>消息
+          </router-link>
 
           <template v-if="userStore.isLogin">
             <el-dropdown @command="onCommand">
@@ -97,6 +100,9 @@
     <!-- 智能客服浮动窗口：全站可用。
          productName 从商品详情页透传，详情页会自动锁定该商品。 -->
     <ChatWidget :product-name="chatProductName" />
+
+    <!-- 商家消息入口：买家显示悬浮按钮（带未读红点），商家走侧栏入口。 -->
+    <MerchantChat v-if="userStore.isLogin" :trigger="!userStore.isMerchant" />
   </div>
 </template>
 
@@ -105,11 +111,13 @@ import { ref, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  Search, HomeFilled, ShoppingCart, List, User, ArrowDown, Lightning, Shop
+  Search, HomeFilled, ShoppingCart, List, User, ArrowDown, Lightning, Shop,
+  ChatDotRound
 } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { getCartCount, getProductDetail } from '@/api'
 import ChatWidget from '@/components/ChatWidget.vue'
+import MerchantChat from '@/components/MerchantChat.vue'
 
 const router = useRouter()
 const route = useRoute()

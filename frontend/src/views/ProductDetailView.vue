@@ -87,6 +87,9 @@
             >
               加入购物车
             </el-button>
+            <el-button type="primary" plain size="large" @click="onContactShop">
+              联系商家
+            </el-button>
             <el-button
               type="danger"
               size="large"
@@ -130,6 +133,9 @@
           </div>
         </div>
       </div>
+
+    <!-- 商家聊天面板：从「联系商家」按钮打开 -->
+    <MerchantChat ref="chatRef" />
     </template>
   </div>
 </template>
@@ -139,6 +145,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getProductDetail, getRelatedProducts, addToCart } from '@/api'
+import MerchantChat from '@/components/MerchantChat.vue'
 import { useUserStore } from '@/stores/user'
 
 const route = useRoute()
@@ -147,6 +154,7 @@ const userStore = useUserStore()
 
 const loading = ref(true)
 const product = ref(null)
+const chatRef = ref(null)
 const related = ref([])
 const quantity = ref(1)
 const selectedSku = ref(null)
@@ -207,6 +215,20 @@ async function loadDetail() {
 
 function goDetail(id) {
   router.push(`/product/${id}`)
+}
+
+/**
+ * 联系商家 —— 打开聊天面板并携带当前商品。
+ *
+ * 会话由后端按「买家 × 店铺」唯一维护，重复点击不会新建，
+ * 历史消息能延续（买家问完 A 款可以接着问 B 款）。
+ */
+function onContactShop() {
+  if (!product.value?.merchantId) {
+    ElMessage.warning('该商品未关联店铺')
+    return
+  }
+  chatRef.value?.openWithShop(product.value.merchantId, product.value.id)
 }
 
 async function onAddCart() {

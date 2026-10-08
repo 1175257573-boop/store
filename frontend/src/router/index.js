@@ -63,6 +63,18 @@ const routes = [
         meta: { title: '收货地址', requiresAuth: true }
       },
       {
+        path: 'messages',
+        name: 'messages',
+        component: () => import('@/views/MessagesView.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
+        path: 'messages',
+        name: 'messages',
+        component: () => import('@/views/MessagesView.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
         path: 'user',
         name: 'user',
         component: () => import('@/views/UserCenterView.vue'),

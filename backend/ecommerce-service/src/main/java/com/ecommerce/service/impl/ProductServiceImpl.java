@@ -113,7 +113,20 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
                     if (p == null) {
                         return null;
                     }
-                    return ProductDetailVO.from(p, loadCategoryMap().get(p.getCategoryId()));
+                    // 店铺名与店铺简介在缓存构建时一并填好。
+                    // merchantId 会随每次请求回查覆盖（见下），
+                    // 但 shopName 只能在构建时填 —— 它不在「实时字段」之列，
+                    // 而商品归属变更极少发生，放缓存里没问题。
+                    Merchant shop = p.getMerchantId() == null
+                            ? null : merchantMapper.selectById(p.getMerchantId());
+                    ProductDetailVO d = ProductDetailVO.from(
+                            p, loadCategoryMap().get(p.getCategoryId()));
+                    if (shop != null) {
+                        d.setShopName(shop.getShopName());
+                        d.setShopDesc(shop.getShopDesc());
+                        d.setShopScore(shop.getScore());
+                    }
+                    return d;
                 },
                 DETAIL_TTL);
 
@@ -131,6 +144,9 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
             vo.setStock(latest.getStock());
             vo.setSales(latest.getSales());
             vo.setViewCount(latest.getViewCount());
+            // 归属也回查：商家调整商品所属店铺后应立即生效，
+            // 否则「联系商家」会打进旧店铺，前端看着却像是新店铺。
+            vo.setMerchantId(latest.getMerchantId());
         }
         // SKU 同样每次回查，不进缓存快照。
         // 原因与上面三个字段一致：SKU 的 price/stock 会被下单流程实时改写，

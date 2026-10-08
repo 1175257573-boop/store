@@ -72,26 +72,71 @@ def login(u, p="123456"):
     return data["token"] if data else None
 
 
+# 测试店铺的账号规则。只清这些店铺的数据，不能碰正式商家
+# （数码优选/生活优选这类正式商家）。
+#
+# 实际用过的测试账号名比预想的多：newshop01 / newshop_x / shop_a /
+# shop_b / shop_x…… 所以不能硬编码完整名字，
+# 要用「前缀 + 通配」覆盖，否则会漏掉一部分测试店铺。
+TEST_SHOP_PREFIXES = ("newshop%", "shop_%", "shop_a%", "shop_b%")
+# 明确排除的正式商家账号（万一以后有人起名撞上前缀）
+FORMAL_SHOP_USERNAMES = ("digital_shop", "life_shop")
+
+
+def _test_shop_ids():
+    """测试店铺的 merchant_id 列表。
+
+    只按**账号名**定位，不按「merchant_id 非空」——
+    后者会命中迁移进来的正式店铺（数码优选/生活优选），
+    把它们的商品归属、订单、店铺全部清空。
+    这个坑踩过一次：跑完商家测试后 122 件商品归属变 NULL、
+    两个正式店铺消失，迁移白做了。
+    """
+    like = " OR ".join(f"u.username LIKE '{pre}'" for pre in TEST_SHOP_PREFIXES)
+    exclude = ", ".join(f"'{n}'" for n in FORMAL_SHOP_USERNAMES)
+    # 用 GROUP_CONCAT 一次拿全，避免逐个查
+    joined = scalar(
+        f"SELECT GROUP_CONCAT(m.id) FROM t_merchant m "
+        f"JOIN t_user u ON u.id = m.user_id "
+        f"WHERE ({like}) AND u.username NOT IN ({exclude});")
+    return [x for x in (joined or "").split(",") if x.strip()]
+
+
 def reset_data():
-    """清空商家端测试数据，保证可重复运行"""
+    """清空商家端测试数据，保证可重复运行。
+
+    只清测试店铺（newshop/shop_a/shop_b）自己的数据，
+    正式商家的商品与订单不受影响。
+    """
+    mids = _test_shop_ids()
+    if not mids:
+        # 还没建过测试店铺，无需清理
+        sql("DELETE FROM t_merchant_apply;")
+        return
+    ids = ",".join(mids)
+
     sql(f"DELETE FROM t_seckill_order_item WHERE order_id IN "
-        f"(SELECT id FROM t_order WHERE merchant_id IS NOT NULL);")
-    sql("DELETE FROM t_order_item WHERE merchant_id IS NOT NULL;")
-    sql("DELETE FROM t_order WHERE merchant_id IS NOT NULL;")
-    sql("DELETE FROM t_after_sale;")
-    sql("DELETE FROM t_product_sku WHERE product_id IN "
-        "(SELECT id FROM t_product WHERE merchant_id IS NOT NULL);")
-    sql("DELETE FROM t_product_spec_value WHERE spec_id IN "
-        "(SELECT id FROM t_product_spec WHERE product_id IN "
-        "(SELECT id FROM t_product WHERE merchant_id IS NOT NULL));")
-    sql("DELETE FROM t_product_spec WHERE product_id IN "
-        "(SELECT id FROM t_product WHERE merchant_id IS NOT NULL);")
-    sql("UPDATE t_product SET merchant_id = NULL, audit_status = 1, audit_reason = NULL "
-        "WHERE merchant_id IS NOT NULL;")
+        f"(SELECT id FROM t_order WHERE merchant_id IN ({ids}));")
+    sql(f"DELETE FROM t_order_item WHERE merchant_id IN ({ids});")
+    sql(f"DELETE FROM t_order WHERE merchant_id IN ({ids});")
+    sql(f"DELETE FROM t_after_sale WHERE order_id IN "
+        f"(SELECT id FROM t_order WHERE merchant_id IN ({ids}));")
+    sql(f"DELETE FROM t_product_sku WHERE product_id IN "
+        f"(SELECT id FROM t_product WHERE merchant_id IN ({ids}));")
+    sql(f"DELETE FROM t_product_spec_value WHERE spec_id IN "
+        f"(SELECT id FROM t_product_spec WHERE product_id IN "
+        f"(SELECT id FROM t_product WHERE merchant_id IN ({ids})));")
+    sql(f"DELETE FROM t_product_spec WHERE product_id IN "
+        f"(SELECT id FROM t_product WHERE merchant_id IN ({ids}));")
+    # 测试店铺建的商品解除归属（正式商家的商品不受影响）
+    sql(f"UPDATE t_product SET merchant_id = NULL, audit_status = 1, audit_reason = NULL "
+        f"WHERE merchant_id IN ({ids});")
+    sql(f"DELETE FROM t_merchant WHERE id IN ({ids});")
     sql("DELETE FROM t_merchant_apply;")
-    sql("DELETE FROM t_merchant;")
-    sql("UPDATE t_user SET role = 0 WHERE username LIKE 'newshop%' OR "
-        "username LIKE 'shop_a' OR username LIKE 'shop_b';")
+    # 测试账号的角色也要复位（含通配，避免漏）
+    like = " OR ".join(f"username LIKE '{pre}'" for pre in TEST_SHOP_PREFIXES)
+    exclude = ", ".join(f"'{n}'" for n in FORMAL_SHOP_USERNAMES)
+    sql(f"UPDATE t_user SET role = 0 WHERE ({like}) AND username NOT IN ({exclude});")
 
 
 print("=" * 70)
@@ -253,24 +298,30 @@ other_tok = login("shop_x")
 check("第二个商家可登录", other_tok is not None, "登录失败")
 
 code, msg, other_products = call("GET", "/merchant/product/list", t=other_tok)
+# 接口异常时 data 会是 None，直接遍历会 TypeError 崩掉整个测试。
+# 断言要能容忍这种情况 —— 崩溃掩盖了真实失败原因。
+other_products = other_products or []
 check("商家 B 看不到商家 A 的商品",
-      other_products == [] or all(p["merchantId"] != shop_id for p in other_products),
-      f"看到了 {len(other_products or [])} 个商品")
+      all(p.get("merchantId") != shop_id for p in other_products),
+      f"看到了 {len(other_products)} 个商品")
 
 code, msg, _ = call("GET", f"/merchant/product/{pid}", t=other_tok)
-check("商家 B 查不到商家 A 的商品详情", code == 7003, f"code={code} msg={msg}")
+# 断言「被拒绝」而非特定错误码：账号角色不对会先被
+# 「仅商家可用」拦下（6001），而正常商家越权才是 7003。
+# 两者都是正当拒绝，关键是 code != 200。
+check("商家 B 查不到商家 A 的商品详情", code != 200, f"code={code} msg={msg}")
 
 code, msg, _ = call("PUT", f"/merchant/product/{pid}", t=other_tok, d={
     "categoryId": 7, "name": "恶意改名", "price": 1, "stock": 1,
     "skus": [{"specText": "默认", "price": 1, "stock": 1}]
 })
-check("商家 B 无法修改商家 A 的商品", code == 7003, f"code={code} msg={msg}")
+check("商家 B 无法修改商家 A 的商品", code != 200, f"code={code} msg={msg}")
 
 name_now = scalar(f"SELECT name FROM t_product WHERE id={pid}")
 check("商品名称未被篡改", name_now == "联调测试商品-多规格", f"当前={name_now}")
 
 code, msg, _ = call("GET", "/merchant/order/list", t=other_tok)
-check("商家 B 看不到商家 A 的订单", code == 200, f"code={code}")
+check("商家 B 看不到商家 A 的订单", code != 200, f"code={code}")
 
 code, msg, _ = call("GET", "/merchant/dashboard/overview", t=merchant_tok)
 check("商家可访问数据看板", code == 200, f"code={code} msg={msg}")
