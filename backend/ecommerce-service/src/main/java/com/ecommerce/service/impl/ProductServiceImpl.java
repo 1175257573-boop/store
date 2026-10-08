@@ -9,9 +9,11 @@ import com.ecommerce.common.constant.RedisKey;
 import com.ecommerce.common.exception.BusinessException;
 import com.ecommerce.common.result.ResultCode;
 import com.ecommerce.dao.entity.Category;
+import com.ecommerce.dao.entity.Merchant;
 import com.ecommerce.dao.entity.Product;
 import com.ecommerce.dao.mapper.CategoryMapper;
 import com.ecommerce.dao.mapper.ProductMapper;
+import com.ecommerce.dao.mapper.MerchantMapper;
 import com.ecommerce.dao.mapper.ProductSkuMapper;
 import com.ecommerce.service.ProductService;
 import com.ecommerce.service.util.RedisCacheUtil;
@@ -38,6 +40,7 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
 
     private final CategoryMapper categoryMapper;
     private final ProductSkuMapper skuMapper;
+    private final MerchantMapper merchantMapper;
     private final RedisCacheUtil cacheUtil;
 
     /** 分类缓存 1 天 */
@@ -47,7 +50,8 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
 
     @Override
     public IPage<ProductVO> pageProducts(int pageNum, int pageSize, Long categoryId,
-                                         String keyword, String sortBy) {
+                                         String keyword, String sortBy,
+                                         Long merchantId) {
         // pageSize 上限 100，防止前端传入超大值把库拖垮
         int safeSize = Math.min(Math.max(pageSize, 1), 100);
         int safeNum = Math.max(pageNum, 1);
@@ -57,6 +61,10 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
 
         if (categoryId != null) {
             wrapper.eq(Product::getCategoryId, categoryId);
+        }
+        // 店铺维度筛选：店铺主页与「只看某店商品」都走这里
+        if (merchantId != null) {
+            wrapper.eq(Product::getMerchantId, merchantId);
         }
         if (keyword != null && !keyword.isBlank()) {
             // 转义 LIKE 通配符，避免用户输入 % 时全表扫描
@@ -79,12 +87,15 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
 
         // 分类 ID -> 名称 映射，一次性查询避免 N+1
         Map<Long, String> categoryMap = loadCategoryMap();
+        // 店铺 ID -> 名称 映射，同样一次性查询
+        Map<Long, String> shopMap = loadShopMap();
 
         IPage<Product> raw = page;
         // 转成 VO 分页：保留分页元信息，仅替换 records
         Page<ProductVO> voPage = new Page<>(raw.getCurrent(), raw.getSize(), raw.getTotal());
         voPage.setRecords(raw.getRecords().stream()
-                .map(p -> ProductVO.from(p, categoryMap.get(p.getCategoryId())))
+                .map(p -> ProductVO.from(p, categoryMap.get(p.getCategoryId()),
+                        shopMap.get(p.getMerchantId())))
                 .collect(Collectors.toList()));
         return voPage;
     }
@@ -165,5 +176,23 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
         List<Category> categories = categoryMapper.selectList(null);
         return categories.stream().collect(Collectors.toMap(Category::getId, Category::getName,
                 (a, b) -> a));
+    }
+
+    /**
+     * 店铺 ID -> 店铺名 映射。
+     *
+     * <p>店铺数量少（几十家），全量查一次的开销可接受，
+     * 比按商品逐个查店铺的 N+1 好得多。
+     * 只取正常营业的店铺，停用的店名不展示。
+     */
+    private Map<Long, String> loadShopMap() {
+        List<Merchant> merchants = merchantMapper.selectList(
+                new LambdaQueryWrapper<Merchant>()
+                        .eq(Merchant::getStatus, BizConst.MERCHANT_NORMAL));
+        if (merchants.isEmpty()) {
+            return Map.of();
+        }
+        return merchants.stream().collect(
+                Collectors.toMap(Merchant::getId, Merchant::getShopName, (a, b) -> a));
     }
 }

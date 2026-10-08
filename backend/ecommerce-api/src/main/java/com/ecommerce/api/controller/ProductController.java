@@ -38,8 +38,10 @@ public class ProductController {
             @RequestParam(defaultValue = "12") int pageSize,
             @RequestParam(required = false) Long categoryId,
             @RequestParam(required = false) String keyword,
-            @RequestParam(defaultValue = "default") String sortBy) {
-        return Result.success(productService.pageProducts(pageNum, pageSize, categoryId, keyword, sortBy));
+            @RequestParam(defaultValue = "default") String sortBy,
+            @RequestParam(required = false) Long merchantId) {
+        return Result.success(productService.pageProducts(
+                pageNum, pageSize, categoryId, keyword, sortBy, merchantId));
     }
 
     @Operation(summary = "查询商品详情", description = "每次访问浏览量 +1")

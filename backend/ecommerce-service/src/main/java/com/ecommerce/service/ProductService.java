@@ -22,9 +22,10 @@ public interface ProductService extends IService<Product> {
      * @param categoryId 分类 ID，可为 null 表示全部
      * @param keyword    名称关键字，可为 null
      * @param sortBy     排序字段：default/sales/priceAsc/priceDesc
+     * @param merchantId 店铺ID筛选，null 表示不限店铺
      */
     IPage<ProductVO> pageProducts(int pageNum, int pageSize, Long categoryId,
-                                  String keyword, String sortBy);
+                                  String keyword, String sortBy, Long merchantId);
 
     /**
      * 查询商品详情，同时浏览量 +1。

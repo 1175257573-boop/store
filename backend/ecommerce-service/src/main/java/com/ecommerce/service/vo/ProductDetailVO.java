@@ -25,6 +25,18 @@ public class ProductDetailVO implements Serializable {
 
     private String categoryName;
 
+    /** 所属店铺ID */
+    private Long merchantId;
+
+    /** 店铺名 */
+    private String shopName;
+
+    /** 店铺简介（详情页展示，来源 t_merchant.shop_desc） */
+    private String shopDesc;
+
+    /** 店铺评分（0-5，一位小数） */
+    private BigDecimal shopScore;
+
     private String name;
 
     private String subtitle;
@@ -62,6 +74,7 @@ public class ProductDetailVO implements Serializable {
         vo.setId(product.getId());
         vo.setCategoryId(product.getCategoryId());
         vo.setCategoryName(categoryName);
+        vo.setMerchantId(product.getMerchantId());
         vo.setName(product.getName());
         vo.setSubtitle(product.getSubtitle());
         vo.setDescription(product.getDescription());

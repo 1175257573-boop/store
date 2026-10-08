@@ -77,4 +77,10 @@ public final class BizConst {
     public static final int MAX_ADDRESS_COUNT = 20;
     /** 单次下单最大购买数量 */
     public static final int MAX_BUY_QUANTITY = 999;
+
+    // ==================== 店铺状态 ====================
+    /** 店铺正常营业 */
+    public static final int MERCHANT_NORMAL = 1;
+    /** 店铺停业（商品仍在架但店铺名不展示，搜索/推荐需过滤） */
+    public static final int MERCHANT_CLOSED = 0;
 }

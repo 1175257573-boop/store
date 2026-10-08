@@ -25,6 +25,12 @@ public class ProductVO implements Serializable {
     /** 分类名称（联表补充） */
     private String categoryName;
 
+    /** 所属店铺ID —— 商品按店铺维度筛选与展示的基础字段 */
+    private Long merchantId;
+
+    /** 店铺名 —— 前端商品卡片展示「某某旗舰店」，省一次查店铺接口 */
+    private String shopName;
+
     private String name;
 
     private String subtitle;
@@ -42,11 +48,19 @@ public class ProductVO implements Serializable {
     private Integer status;
 
     /** 由实体 + 分类名转换 */
-    public static ProductVO from(Product product, String categoryName) {
+    /**
+     * 商品实体转 VO。
+     *
+     * @param categoryName 分类名，可为 null
+     * @param shopName     店铺名，可为 null（列表页批量回填用）
+     */
+    public static ProductVO from(Product product, String categoryName, String shopName) {
         ProductVO vo = new ProductVO();
         vo.setId(product.getId());
         vo.setCategoryId(product.getCategoryId());
         vo.setCategoryName(categoryName);
+        vo.setMerchantId(product.getMerchantId());
+        vo.setShopName(shopName);
         vo.setName(product.getName());
         vo.setSubtitle(product.getSubtitle());
         vo.setMainImage(product.getMainImage());
@@ -59,6 +73,10 @@ public class ProductVO implements Serializable {
     }
 
     public static ProductVO from(Product product) {
-        return from(product, null);
+        return from(product, null, null);
+    }
+
+    public static ProductVO from(Product product, String categoryName) {
+        return from(product, categoryName, null);
     }
 }
