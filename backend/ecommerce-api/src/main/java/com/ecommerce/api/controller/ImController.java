@@ -73,6 +73,13 @@ public class ImController {
         return Result.success(imService.pollMessages(sessionId, afterId));
     }
 
+    @Operation(summary = "全部标记已读",
+            description = "进入消息中心时调用；清空当前身份在所有会话里的未读")
+    @PostMapping("/read-all")
+    public Result<Integer> markAllRead() {
+        return Result.success(imService.markAllRead());
+    }
+
     @Operation(summary = "发送消息", description = "买家与商家均可发送；管理员不参与沟通")
     @PostMapping("/message")
     public Result<Map<String, Long>> sendMessage(@RequestBody Map<String, Object> body) {

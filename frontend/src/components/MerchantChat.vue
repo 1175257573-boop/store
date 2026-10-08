@@ -162,7 +162,7 @@ import {
 } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import {
-  listImMessages, listImSessions, getImUnread, openImSession,
+  listImMessages, listImSessions, getImUnread, markAllImRead, openImSession,
   pollImMessages, sendImMessage
 } from '@/api/im'
 
@@ -297,6 +297,10 @@ function switchToMessage() {
 
 async function loadSessions() {
   try {
+    // 先清未读再看列表 —— 顺序不能反。
+    // 用户「看到会话列表」就是「已查看」，此时就该清；
+    // 若先看列表再清，本轮渲染出来的数字是旧的，红点要等下次刷新才消失。
+    await markAllImRead()
     const res = await listImSessions()
     sessions.value = res.data || []
   } catch (e) {

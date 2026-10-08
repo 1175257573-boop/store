@@ -229,6 +229,40 @@ public class ImService {
         return m.getId();
     }
 
+    /**
+     * 全部标记已读（进入消息中心时调用）。
+     *
+     * <p><b>为什么需要它</b>：导航栏红点的语义是「有多少条没看过」。
+     * 用户进入消息中心看到会话列表，本身就代表「已查看」——
+     * 若只清当前打开的那个会话，列表里其他会话的未读点会一直挂着，
+     * 用户会以为没清掉。
+     *
+     * <p>商家与买家清的是各自的侧：商家清「买家发给自己的」，
+     * 买家清「商家发给自己的」。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public int markAllRead() {
+        int role = currentRole();
+        if (role == RoleConst.ROLE_ADMIN) {
+            return 0;   // 管理员只读，不参与沟通
+        }
+        if (role == RoleConst.ROLE_MERCHANT) {
+            Long myShop = UserContextHolder.requireMerchantId();
+            // 消息的接收方是商家本人（t_user.id），不是店铺ID
+            Merchant shop = merchantMapper.selectById(myShop);
+            if (shop == null) {
+                return 0;
+            }
+            int n = messageMapper.markAllReadAsMerchant(shop.getUserId(), myShop);
+            messageMapper.clearMerchantUnreadAll(myShop);
+            return n;
+        }
+        Long myId = UserContextHolder.requireUserId();
+        int n = messageMapper.markAllReadAsBuyer(myId);
+        messageMapper.clearBuyerUnreadAll(myId);
+        return n;
+    }
+
     // ==================== 权限 ====================
 
     /**

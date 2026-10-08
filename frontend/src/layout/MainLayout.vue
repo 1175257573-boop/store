@@ -31,12 +31,16 @@
                /merchant/dashboard 是商家页，管理员进去会撞守卫被弹回来。
                与 router/index.js 里 /merchant 的默认重定向保持同一套规则。 -->
           <router-link v-if="userStore.isAdmin"
-                       to="/merchant/audit" class="nav-item merchant-entry">
+                       to="/merchant/audit" class="nav-item merchant-entry has-badge">
             <el-icon><Shop /></el-icon>管理后台
+            <!-- 管理员：待审核入驻 + 待审核商品 -->
+            <NavBadge :count="merchantBadges.products + adminTodoTotal" />
           </router-link>
           <router-link v-else-if="userStore.isMerchant"
-                       to="/merchant/dashboard" class="nav-item merchant-entry">
+                       to="/merchant/dashboard" class="nav-item merchant-entry has-badge">
             <el-icon><Shop /></el-icon>商家中心
+            <!-- 商家：待发货/待收货订单 + 待处理售后 + 待审核商品 -->
+            <NavBadge :count="merchantBadges.orders + merchantBadges.afterSale" />
           </router-link>
           <router-link to="/cart" class="nav-item">
             <el-badge :value="cartCount" :hidden="cartCount === 0" :max="99">
@@ -44,11 +48,15 @@
             </el-badge>
             购物车
           </router-link>
-          <router-link to="/orders" class="nav-item">
+          <router-link to="/orders" class="nav-item has-badge">
             <el-icon><List /></el-icon>订单
+            <!-- 买家待处理：待付款 + 已发货待收货 -->
+            <NavBadge :count="buyerBadges.orders" />
           </router-link>
-          <router-link v-if="userStore.isLogin" to="/messages" class="nav-item">
+          <router-link v-if="userStore.isLogin" to="/messages" class="nav-item has-badge">
             <el-icon><ChatDotRound /></el-icon>消息
+            <!-- 买家侧是商家回复的未读；商家侧是买家咨询的未读 -->
+            <NavBadge :count="isMerchantView ? merchantBadges.messages : buyerBadges.messages" />
           </router-link>
 
           <template v-if="userStore.isLogin">
@@ -107,7 +115,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -115,6 +123,11 @@ import {
   ChatDotRound
 } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
+import NavBadge from '@/components/NavBadge.vue'
+import {
+  buyerBadges, merchantBadges, refreshBadges, resetBadges
+} from '@/composables/useBadge'
+import { getAdminTodo } from '@/api/merchant'
 import { getCartCount, getProductDetail } from '@/api'
 import ChatWidget from '@/components/ChatWidget.vue'
 import MerchantChat from '@/components/MerchantChat.vue'
@@ -132,6 +145,34 @@ const cartCount = ref(0)
  * 离开详情页清空，避免拿上一页的商品回答当前页的问题。
  */
 const chatProductName = ref('')
+
+/**
+ * 商家视角判定：商家与管理员的「消息」红点含义不同。
+ * 买家看到的是商家回复的未读；商家看到的是买家咨询的未读。
+ */
+const isMerchantView = computed(() =>
+  userStore.isMerchant || userStore.isAdmin)
+
+/**
+ * 管理员待办总数（待审核入驻 + 待审核商品）。
+ * <p>单独拉而不是混进 useBadge —— 它只在管理后台有意义，
+ * 放进通用 composable 会让买家侧也去请求一个用不到的接口。</p>
+ */
+const adminTodoTotal = ref(0)
+
+async function loadAdminTodo() {
+  if (!userStore.isAdmin) {
+    adminTodoTotal.value = 0
+    return
+  }
+  try {
+    const res = await getAdminTodo()
+    const d = res?.data || {}
+    adminTodoTotal.value = (d.applyPending || 0) + (d.productPending || 0)
+  } catch (e) {
+    adminTodoTotal.value = 0
+  }
+}
 
 async function syncChatProduct() {
   const id = route.params.id
@@ -194,8 +235,76 @@ onMounted(() => {
   refreshCartCount()
   // 首次进入也要同步一次：直接访问详情页 URL 时 watch 不会触发
   syncChatProduct()
+  refreshBadges()
+  if (userStore.isAdmin) loadAdminTodo()
   // 全局事件：加购/下单后由页面触发刷新角标，避免层层透传
   window.addEventListener('cart-change', refreshCartCount)
+  // 发消息/下单/发货等动作都会改变红点，统一在这里刷新
+  window.addEventListener('badge-change', refreshBadges)
+  startBadgePolling()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('cart-change', refreshCartCount)
+  window.removeEventListener('badge-change', refreshBadges)
+  stopBadgePolling()
+})
+
+/**
+ * 红点轮询：30 秒一次。
+ *
+ * <p>不用 WebSocket 是因为量小（演示/教学场景），
+ * 30 秒足以让「对方刚发的消息」及时出现在角标上，又不压后端。
+ *
+ * <p>页面隐藏时暂停 —— 用户不在看页面时轮询没有意义，
+ * 反而会无谓消耗服务器（你那台只有 2 核）。
+ */
+let badgeTimer = null
+
+function startBadgePolling() {
+  stopBadgePolling()
+  badgeTimer = setInterval(() => {
+    if (document.hidden || !userStore.isLogin) return
+    refreshBadges()
+    if (userStore.isAdmin) loadAdminTodo()
+  }, 30000)
+}
+
+function stopBadgePolling() {
+  if (badgeTimer) {
+    clearInterval(badgeTimer)
+    badgeTimer = null
+  }
+}
+
+// 从后台切回前台时立刻刷一次（浏览器会把定时器节流，间隔可能很长）
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && userStore.isLogin) {
+    refreshBadges()
+    if (userStore.isAdmin) loadAdminTodo()
+  }
+})
+
+/**
+ * 「进入页面即清除」的时机。
+ *
+ * <p>红点由服务端数据决定，前端**不做本地清零** ——
+ * 本地清零刷新就回来，用户会以为没清掉。
+ * 这里做的是「进入相关页面后重新拉一次」：
+ * 拉消息接口会顺带 markRead，订单列表页展示后服务端计数自然变化，
+ * 回到导航栏时数字就少了。
+ */
+watch(() => route.path, async (path) => {
+  if (!userStore.isLogin) return
+  await nextTick()
+  refreshBadges()
+  if (userStore.isAdmin) loadAdminTodo()
+})
+
+// 切换账号：先清零再刷新，否则 A 账号的红点会留给 B 账号看
+watch(() => userStore.token, () => {
+  resetBadges()
+  if (userStore.isLogin) refreshBadges()
 })
 </script>
 
@@ -266,6 +375,46 @@ onMounted(() => {
 }
 .nav-item:hover {
   color: var(--ec-primary);
+}
+
+/* 带红点的导航项需要定位上下文，红点才能贴在图标右上角。
+   没有这行的话红点会往上冒到整个 header 上去。 */
+.nav-item.has-badge {
+  position: relative;
+}
+
+/* 窄屏隐藏文字只留图标时，红点往右挪一点，免得压到图标本体 */
+@media (max-width: 900px) {
+  /* 窄屏优先保证红点可见：导航文字会挤出屏幕，
+     但红点是「有事要处理」的信号，不能跟着一起消失。
+     做法是把文字藏起来只留图标，导航项本身横向滚动。 */
+  .header-inner {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .nav {
+    /* 图标 + 间距的宽度：只留图标才放得下 */
+    order: 3;
+    width: 100%;
+    margin-left: 0;      /* 换行后不该再靠右对齐 */
+    overflow-x: auto;
+    justify-content: flex-start;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .nav::-webkit-scrollbar {
+    height: 0;          /* 横向滚动条不占视觉空间 */
+  }
+  .nav-item {
+    flex-shrink: 0;      /* 不让图标被压扁 */
+    font-size: 13px;
+  }
+  /* 文字藏起来，红点就有地方贴了 —— 偏移量回到图标正上方 */
+  .nav-item.has-badge .nav-badge,
+  .nav-item.has-badge :deep(.nav-badge) {
+    left: 10px;
+    top: -2px;
+  }
 }
 .nav-item.router-link-active {
   color: var(--ec-primary);

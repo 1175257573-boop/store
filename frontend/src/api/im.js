@@ -46,3 +46,11 @@ export const pollImMessages = (sessionId, afterId) =>
 /** 发送消息 */
 export const sendImMessage = (sessionId, content) =>
   request.post('/im/message', { sessionId, content })
+/**
+ * 全部标记已读。
+ *
+ * <p>进入消息中心时调用 —— 看到会话列表就算「已查看」。
+ * 只清当前打开的会话不够：列表里其他会话的未读点会一直挂着。
+ */
+export const markAllImRead = () =>
+  request.post('/im/read-all')
